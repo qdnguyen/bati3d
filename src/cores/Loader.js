@@ -308,7 +308,7 @@ Loader.prototype = {
             var node   = this._nodes.items[n];
     	    var sphere = node.sphere;
             // inline distance computation
-	    var dist = sphere.center.distanceTo(this._viewPoint);
+	    var dist = sphere.center.distanceTo(this._viewPoint) - sphere.radius;
 
             // end inline
 	    if (dist < 0.1) dist = 0.1;
@@ -356,6 +356,7 @@ Loader.prototype = {
 		var visitQueue    = new Queue();
 
                 //initialize array states
+                /*
 		var nodesCount = this._nodes.length;
                 
 		for(var i = 0; i < nodesCount; i++) {
@@ -363,7 +364,8 @@ Loader.prototype = {
 			this._blockedNodes[i] = 0;
 			this._selectedNodes[i] = 0;
 		}
-                
+                */
+               
                 //start with root
 		this._hierarchyVisit_insertNode(0, null, visitQueue);
                 
