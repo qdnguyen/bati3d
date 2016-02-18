@@ -37,6 +37,7 @@ var Loader = function (scene) {
         this.LITTLE_ENDIAN_DATA = State.LITTLE_ENDIAN_DATA;
         this.PADDING            = State.PADDING; 
         
+        this._nodesIndexToRenderThisFrame = null;
 
 	this._reset();
 
@@ -86,7 +87,7 @@ Loader.prototype = {
 
 		this._pendingRequests = 0;
 		this._candidateNodes  = null;
-		this._redrawOnNewNodes = true;
+		//this._redrawOnNewNodes = true;
 
 		var that = this;
                 
@@ -308,7 +309,7 @@ Loader.prototype = {
             var node   = this._nodes.items[n];
     	    var sphere = node.sphere;
             // inline distance computation
-	    var dist = sphere.center.distanceTo(this._viewPoint) - sphere.radius;
+	    var dist = sphere.center.distanceTo(this._viewPoint) - node.tightRadius;//sphere.radius;
 
             // end inline
 	    if (dist < 0.1) dist = 0.1;
@@ -324,6 +325,7 @@ Loader.prototype = {
                 	var error = this._hierarchyVisit_nodeError(n);
                         //if error is less than SSE
                         //so render this node
+                        console.log(error,n)
                         if(error < this._targetError*0.8) {
                                 var node  = this._nodes.items[n];
                                 node.renderError = error;
@@ -340,50 +342,33 @@ Loader.prototype = {
                                     this._hierarchyVisit_insertNode(child, n, visitQueue);
                                 }            
                         }//end SSE
-                }else{//if not in frustum
-                    //do nothing or change visibility
-                    node.visible = false;
                 }
 	},
 
 
 	_hierarchyVisit : function () {
-            
-                //if(Debug.extract === true) return;
-                
-		this._redrawOnNewNodes = false;
-                //initializz visit queue
+                //initializz visit queue for this frame
 		var visitQueue    = new Queue();
-
-                //initialize array states
-                /*
-		var nodesCount = this._nodes.length;
-                
-		for(var i = 0; i < nodesCount; i++) {
-			this._visitedNodes[i] = 0; 
-			this._blockedNodes[i] = 0;
-			this._selectedNodes[i] = 0;
-		}
-                */
-               
-                //start with root
-		this._hierarchyVisit_insertNode(0, null, visitQueue);
-                
-		var candidatesCount = 0;
+        	var candidatesCount = 0;
 		this._candidateNodes = [ ];
-		var candidateNodes = this._candidateNodes;
+                this._nodesIndexToRenderThisFrame = [];
+                //start with root, if tile is not in frustum, does nothing
+                //otherwise prepare candidates for loading?
+		this._hierarchyVisit_insertNode(0, null, visitQueue);
 
+                var candidateNodes = this._candidateNodes;
+                var nodesIndexToRenderThisFrame = this._nodesIndexToRenderThisFrame;
 		this.currentError = 1e20;
 		var count = 0;
+                
 		while (visitQueue.getLength() && (count < this._maxPendingRequests)) {
 			var node = visitQueue.dequeue();
 			//var n        = node.index;
 			if ((candidatesCount < this._maxPendingRequests) && (node.status == State._NODE_NONE)) {
 				candidatesCount++;
-				candidateNodes.push(node);
+                    		candidateNodes.push(node);
+                                nodesIndexToRenderThisFrame.push(node.index);
 			}
-			
-			//this._hierarchyVisit_insertChildren(n, visitQueu);
 		}
 	},
 
@@ -487,33 +472,27 @@ Loader.prototype = {
 		//if (this.inBegin) return;
 		//this._inBegin = true;
 		if (this._header.nodesCount <= 0) return;
-		
+		//this._beginRender();
                 this._updateView(camera, renderer);
 		//this._updateCache();
 		this._hierarchyVisit();
 		this._requestNodes();
         },
 
-	begin : function () {
-		if (!this.isOpen) return;
-		if (this.inBegin) return;
-		this._inBegin = true;
-		if (this._header.nodesCount <= 0) return;
-		this._prepare();
-	},
-
-	end : function () {
-		if (!this.inBegin) return;
-		this._frame++;
-		this._inBegin = false;
-	},
-
-	render : function () {
-		if (!this.inBegin) return;
-		this._beginRender();
-		this._render();
-		this._endRender();
-	}
+	_beginRender : function(){
+                var sceneChilds = this._scene.children;
+                for( var i = sceneChilds.length - 1; i >= 0; i--) {
+                    var child = sceneChilds[i];
+                    //Must use remove to clean GPU memory
+                    //Loader.js must be inherit from THREE.Mesh so 
+                    // we can do check THREE.XXXX
+                    if(child instanceof THREE.Mesh){
+                          child.visible = false; 
+                    }
+                }
+        }
+        
+        
 };
 
 return Loader;

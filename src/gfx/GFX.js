@@ -143,41 +143,55 @@ GFX.prototype.setScene = function(url) {
 		node.request = null;
             	node.status  = State._NODE_READY;
                 var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                // var material = new THREE.MeshBasicMaterial( { color: color, wireframe: true, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
-                var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
+                 var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
+                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
                 var mesh = new THREE.Mesh( geometryNode, material );
-                    mesh.name = node.index;
                 return mesh;
         } 
     
         function onUpdate() {
-                
+                 //invisibleAll();
                  var sig = {
                                     normals: model._header.signature.vertex.hasNormal,
 				    colors:  model._header.signature.vertex.hasColor,
 				    indices: model._header.signature.face.hasIndex
                            };
                     
-                var nodes = model._readyNodes;
+                var nodesIndex = model._nodesIndexToRenderThisFrame;
                     
-                for(var i = 0; i < nodes.length; i++){
+                for(var i = 0; i < nodesIndex.length; i++){
                         //this variable is never used.
-                        var node = nodes[i];
-                        var mesh = createMesh(sig, node);
-                        if(node.parent != null){
-                		var parent = scene.getObjectByName(node.parent);
-                                //avoid a child have same parent with other
-                                if(parent) parent.visible = false;
-                                scene.add(mesh);
+                        var key  = nodesIndex[i];
+                        var node = model._cachedNodes.get(key);
+                        if(node === undefined) continue;
+                        var mesh;
+                        if(mesh = scene.getObjectByName(key)){
+                                mesh.visible = true;
                         }else{
+                                mesh = createMesh(sig, node);
+                                mesh.name = key;
                                 scene.add(mesh);
                         }       
             }
+            
+            //reset one time render have finished
+            model._nodesIndexToRenderThisFrame = [];
         }//end update function
 	
-         
+        function invisibleAll(){
+                var sceneChilds = scene.children;
+                for( var i = sceneChilds.length - 1; i >= 0; i--) {
+                    var child = sceneChilds[i];
+                    //Must use remove to clean GPU memory
+                    //Loader.js must be inherit from THREE.Mesh so 
+                    // we can do check THREE.XXXX
+                    if(child instanceof THREE.Mesh){
+                          child.visible = false; 
+                    }
+                }
+        }        
     
-    this._sceneParsed = true;
+        this._sceneParsed = true;
 
 };
 
