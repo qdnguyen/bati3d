@@ -108,89 +108,10 @@ define (['THREE',
 GFX.prototype.setScene = function(url) {
 	if (!url) throw new Error('url is required');
         model = new Loader(scene);
-        model.targetError = 1.0;
-	model._targetFps = 25;
+        //model.targetError = 1.0;
+	//model._targetFps = 25;
 	model.open(url);
-	model.onUpdate = onUpdate;
-        
-
-        function createMesh(sig, node){
-                var offset = 0;
-		var nv = node.verticesCount;
-		var nf = node.facesCount;
-
-                var size = node.verticesCount*12; //float
-                var positions = new Float32Array(node.buffer, offset, nv*3);
-                var normals, colors, faces;
-                if(sig.normals) {
-                                normals = new Int16Array(node.buffer, size, nv*3);
-                                size += nv*6; //short
-                }
-                if(sig.colors) {
-                                colors = new Uint8ClampedArray(node.buffer, size, nv*4);
-                                size += nv*4; //chars
-                }
-                if(sig.indices) {
-                                faces = new Uint16Array(node.buffer, size, nf * 3);
-                                size += nf*6; //short
-                }
-
-                var geometryNode   =  new THREE.BufferGeometry();
-
-                geometryNode.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-                geometryNode.setIndex(new THREE.BufferAttribute( faces, 1));    
-
-		node.request = null;
-            	node.status  = State._NODE_READY;
-                var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                 var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
-                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
-                var mesh = new THREE.Mesh( geometryNode, material );
-                return mesh;
-        } 
-    
-        function onUpdate() {
-                 //invisibleAll();
-                 var sig = {
-                                    normals: model._header.signature.vertex.hasNormal,
-				    colors:  model._header.signature.vertex.hasColor,
-				    indices: model._header.signature.face.hasIndex
-                           };
-                    
-                var nodesIndex = model._nodesIndexToRenderThisFrame;
-                    
-                for(var i = 0; i < nodesIndex.length; i++){
-                        //this variable is never used.
-                        var key  = nodesIndex[i];
-                        var node = model._cachedNodes.get(key);
-                        if(node === undefined) continue;
-                        var mesh;
-                        if(mesh = scene.getObjectByName(key)){
-                                mesh.visible = true;
-                        }else{
-                                mesh = createMesh(sig, node);
-                                mesh.name = key;
-                                scene.add(mesh);
-                        }       
-            }
-            
-            //reset one time render have finished
-            model._nodesIndexToRenderThisFrame = [];
-        }//end update function
-	
-        function invisibleAll(){
-                var sceneChilds = scene.children;
-                for( var i = sceneChilds.length - 1; i >= 0; i--) {
-                    var child = sceneChilds[i];
-                    //Must use remove to clean GPU memory
-                    //Loader.js must be inherit from THREE.Mesh so 
-                    // we can do check THREE.XXXX
-                    if(child instanceof THREE.Mesh){
-                          child.visible = false; 
-                    }
-                }
-        }        
-    
+	//model.onUpdate = onUpdate;
         this._sceneParsed = true;
 
 };

@@ -24,7 +24,7 @@ var Loader = function (scene) {
 	this._maxCacheSize       = State.DEFAULT_CACHE_SIZE;
 	//this._drawBudget         = State.DEFAULT_DRAW_BUDGET;
 	this._minDrawBudget      = State.DEFAULT_DRAW_BUDGET / 4;
-	this._onUpdate           = null;
+        //this._onUpdate           = null;
 	this._onSceneReady       = null;
 
 	//this._mmat = new THREE.Matrix4().identity(); 
@@ -197,7 +197,7 @@ Loader.prototype = {
 	},
 
 	_signalUpdate : function () {
-		var upd = this._onUpdate;
+		var upd = this._onUpdate.bind(this);
 		if (upd) {
 			upd();
 		}
@@ -211,7 +211,7 @@ Loader.prototype = {
 	set onSceneReady(f) {
 		this._onSceneReady = f;
 	},
-
+/*
 	get onUpdate() {
 		return this._onUpdate;
 	},
@@ -219,7 +219,7 @@ Loader.prototype = {
 	set onUpdate(f) {
 		this._onUpdate = f;
 	},
-
+*/
 	get status() {
 		return this._status;
 	},
@@ -312,7 +312,7 @@ Loader.prototype = {
 	    var dist = sphere.center.distanceTo(this._viewPoint) - node.tightRadius;//sphere.radius;
 
             // end inline
-	    if (dist < 0.1) dist = 0.1;
+	    if (dist < 0.01) dist = 0.01;
 
 	    return this._resolution *node.error/dist;
 	},
@@ -325,7 +325,7 @@ Loader.prototype = {
                 	var error = this._hierarchyVisit_nodeError(n);
                         //if error is less than SSE
                         //so render this node
-                        console.log(error,n)
+                        //console.log(error,n)
                         if(error < this._targetError*0.8) {
                                 var node  = this._nodes.items[n];
                                 node.renderError = error;
@@ -446,7 +446,7 @@ Loader.prototype = {
 	},
 
         _updateView : function (camera, renderer) {
-        	camera.updateMatrixWorld();
+        	
                 camera.updateMatrixWorld();
         	var viewI = camera.matrixWorldInverse;
                 var world = this.matrixWorld;
@@ -490,7 +490,91 @@ Loader.prototype = {
                           child.visible = false; 
                     }
                 }
+        },
+        
+        _createMesh : function (sig, node){
+                var offset = 0;
+		var nv = node.verticesCount;
+		var nf = node.facesCount;
+
+                var size = node.verticesCount*12; //float
+                var positions = new Float32Array(node.buffer, offset, nv*3);
+                var normals, colors, faces;
+                if(sig.normals) {
+                                normals = new Int16Array(node.buffer, size, nv*3);
+                                size += nv*6; //short
+                }
+                if(sig.colors) {
+                                colors = new Uint8ClampedArray(node.buffer, size, nv*4);
+                                size += nv*4; //chars
+                }
+                if(sig.indices) {
+                                faces = new Uint16Array(node.buffer, size, nf * 3);
+                                size += nf*6; //short
+                }
+
+                var geometryNode   =  new THREE.BufferGeometry();
+
+                geometryNode.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+                geometryNode.setIndex(new THREE.BufferAttribute( faces, 1));    
+
+		node.request = null;
+            	node.status  = State._NODE_READY;
+                var color = new THREE.Color().setHex( Math.random() * 0xffffff );
+                 var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
+                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
+                var mesh = new THREE.Mesh( geometryNode, material );
+                return mesh;
+        },
+        
+        _onUpdate : function () {
+                 //invisibleAll();
+                 var sig = {
+                                    normals: this._header.signature.vertex.hasNormal,
+				    colors:  this._header.signature.vertex.hasColor,
+				    indices: this._header.signature.face.hasIndex
+                           };
+                    
+                var nodesIndex = this._nodesIndexToRenderThisFrame;
+                    
+                for(var i = 0; i < nodesIndex.length; i++){
+                        //this variable is never used.
+                        var key  = nodesIndex[i];
+                        var mesh = this._scene.getObjectByName(key);
+                        //if node have not been rendered yet in scene
+                        if(!mesh){
+                               var node = this._cachedNodes.get(key);
+                               if(!node) continue;
+                               //set visibility of parent or children in scene
+                               this._setVisibilityParentAndChild(key);
+                               //create and add mesh into scene
+                               mesh = this._createMesh(sig, node);
+                               mesh.name = key;
+                               this._scene.add(mesh);
+                        }       
+                }
+            
+            //reset one time render have finished
+            this._nodesIndexToRenderThisFrame = [];
+        },
+        
+        _setVisibilityParentAndChild  : function (key){
+                var node    = this._nodes.items[key];
+            	var patches = this._patches.items;
+                
+                var parentKey = node.parent;
+                var parent = this._scene.getObjectByName(parentKey);
+                //invisible parent before add its child
+                if(parent) {parent.visible = false; console.log('remove parent :', parentKey, 'of ', key)}
+                
+                for(var i = node.firstPatch; i < node.lastPatch; ++i) {
+                        var patch    = patches[i];
+                        var childKey = patch.node;
+                        var child = this._scene.getObjectByName(childKey);
+                        if(child) {child.visible = false; console.log('remove children :', childKey, 'of ', key)}
+                }     
         }
+	
         
         
 };
