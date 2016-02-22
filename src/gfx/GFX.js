@@ -70,15 +70,15 @@ define (['THREE',
          
                         //TODO: must be replace by automatic camera postion initialization
 			//by using lon/lat
-			//camera.position.set(4203240,168454, 4778260);
-                        camera.position.set(-3307.55517578125,5222.22021484375, 3658.525634765625);
+			camera.position.set(4201066.709676039,165839.9307729964, 4780241.631086124);
+            //            camera.position.set(-3307.55517578125,5222.22021484375, 3658.525634765625);
 			//change up to north/z
 			//change up axis does not change orbitcontrol 
 			//when we have threejs version under 67
 			//camera.up.set( 0, 0, 1 );
                         
-                        var target = new THREE.Vector3(-3307.55517578125,5222.22021484375, 3558.525634765625);
-                        
+                      //  var target = new THREE.Vector3(-3307.55517578125,5222.22021484375, 3558.525634765625);
+                        var target = new THREE.Vector3(4201066.709676039,166839.9307729964, 4780241.631086124);
                         camera.lookAt(target);
                         
 			scene.add(camera);
@@ -92,8 +92,8 @@ define (['THREE',
 			//window.addEventListener('keydown', onKeyDown, false);
 			window.addEventListener('resize', resize, false);
                         
-                        this.setScene("models/res1_wgs84_local_coord.nexus");
-                                     
+                        //this.setScene("models/res1_wgs84_local_coord.nexus");
+                        this.setScene("models/ZoneAExporter_pivot.nxs");             
                         this.configControls(camera, renderer, target);
                        // start animation frame and rendering
                         run();

@@ -2,8 +2,6 @@ define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './P
 function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, Queue, LRUCache, BinaryRequest){
     
 
-
-
 var Debug = {
 	nodes: false,    //color each node
 	culling: false,  //visibility culling disabled
@@ -27,11 +25,7 @@ var Loader = function (scene) {
         //this._onUpdate           = null;
 	this._onSceneReady       = null;
 
-	//this._mmat = new THREE.Matrix4().identity(); 
-	//this._vmat = new THREE.Matrix4().identity();
-	//this._pmat = new THREE.Matrix4().identity();
         this._frustum = new THREE.Frustum();
-        
 	this._viewPoint   = new THREE.Vector3();
         
         this.LITTLE_ENDIAN_DATA = State.LITTLE_ENDIAN_DATA;
@@ -40,11 +34,9 @@ var Loader = function (scene) {
         this._nodesIndexToRenderThisFrame = null;
 
 	this._reset();
-
-	//this._updateView();
 };
-
-Loader.prototype = Object.create(THREE.Object3D.prototype);
+Loader.prototype = Object.create( THREE.Object3D.prototype );
+Loader.prototype.constructor = Loader;
 
 
 Loader._sortPatchesFunction = function (a, b) {
@@ -127,8 +119,14 @@ Loader.prototype = {
 		var header = new Header();
 		header.import(view, offset, littleEndian);
 		this._header = header;
+                
+                this._updateObjectPosition(header);
 	},
 
+        _updateObjectPosition: function(header){
+                this.position.set(header.offsetX, header.offsetY, header.offsetZ);
+        },
+        
 	_requestIndex : function () {
 		var header = this._header;
 		var offset = Header.SIZEOF;
@@ -159,7 +157,7 @@ Loader.prototype = {
 		var offset = 0;
 
 		this._nodes = new NodeIndex();
-		offset += this._nodes.import(header.nodesCount, view, offset, littleEndian);
+		offset += this._nodes.import(header, view, offset, littleEndian);
 
 		this._patches = new PatchIndex();
 		offset += this._patches.import(header.patchesCount, view, offset, littleEndian);
@@ -521,8 +519,8 @@ Loader.prototype = {
 		node.request = null;
             	node.status  = State._NODE_READY;
                 var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                 var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
-                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
+                 //var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
+                var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
                 var mesh = new THREE.Mesh( geometryNode, material );
                 return mesh;
         },
@@ -550,6 +548,7 @@ Loader.prototype = {
                                //create and add mesh into scene
                                mesh = this._createMesh(sig, node);
                                mesh.name = key;
+                               mesh.position.copy(this.position);
                                this._scene.add(mesh);
                         }       
                 }

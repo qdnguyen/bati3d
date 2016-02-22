@@ -6,7 +6,7 @@ var Header = function () {
 	this.reset();
 };
 
-Header.SIZEOF = 5 * Uint32Array.BYTES_PER_ELEMENT + 2 * 2 * Uint32Array.BYTES_PER_ELEMENT + Signature.SIZEOF + Sphere3f.SIZEOF;
+Header.SIZEOF = 5 * Uint32Array.BYTES_PER_ELEMENT + 2 * 2 * Uint32Array.BYTES_PER_ELEMENT + Signature.SIZEOF + Sphere3f.SIZEOF + 3*Float64Array.BYTES_PER_ELEMENT;
 Header.MAGIC  = 0x4E787320;
 
 Header.prototype = {
@@ -49,11 +49,13 @@ Header.prototype = {
 		this.patchesCount   = view.getUint32(offset + s, littleEndian);               s += Uint32Array.BYTES_PER_ELEMENT;
 		this.texturesCount  = view.getUint32(offset + s, littleEndian);               s += Uint32Array.BYTES_PER_ELEMENT;
 		s                  += this.sphere.import(view, offset + s, littleEndian);
-
+                this.offsetX        = view.getFloat64(offset + s,littleEndian);               s += Float64Array.BYTES_PER_ELEMENT;
+                this.offsetY        = view.getFloat64(offset + s,littleEndian);               s += Float64Array.BYTES_PER_ELEMENT;
+                this.offsetZ        = view.getFloat64(offset + s,littleEndian);               s += Float64Array.BYTES_PER_ELEMENT;
 		return s;
 	}
 };
 
 return Header;
 
-})
+});

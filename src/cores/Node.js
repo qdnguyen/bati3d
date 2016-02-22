@@ -34,7 +34,12 @@ Node.prototype = {
 		this.tightRadius    = view.getFloat32(offset + s, littleEndian); s += Float32Array.BYTES_PER_ELEMENT;
 		this.firstPatch     = view.getUint32(offset + s, littleEndian);  s += Uint32Array.BYTES_PER_ELEMENT;
 		return s;
-	}
+	},
+        addOffsetToSphere : function(header){
+               this.sphere.center.x +=header.offsetX;
+               this.sphere.center.y +=header.offsetY;
+               this.sphere.center.z +=header.offsetZ;
+        }        
 };
 
 return Node;

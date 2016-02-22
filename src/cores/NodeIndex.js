@@ -15,16 +15,17 @@ NodeIndex.prototype = {
 		return (this.items.length - 1);
 	},
 
-	import : function (nodesCount, view, offset, littleEndian) {
-		this.items = new Array(nodesCount);
+	import : function (header, view, offset, littleEndian) {
+		this.items = new Array(header.nodesCount);
 		var s = 0;
-		for (var i=0; i<nodesCount; ++i) {
+		for (var i=0; i<header.nodesCount; ++i) {
 			var node = new Node();
 			s += node.import(view, offset + s, littleEndian);
 			node.index = i;
+                        node.addOffsetToSphere(header);
 			this.items[i] = node;
 		}
-		for (var i=0; i<(nodesCount-1); ++i) {
+		for (var i=0; i<(header.nodesCount-1); ++i) {
 			var currNode = this.items[i];
 			var nextNode = this.items[i+1];
 			currNode.lastPatch = nextNode.firstPatch;
