@@ -67,15 +67,7 @@ define (['THREE',
         		scene = new THREE.Scene();
 			// put a camera in the scene
                 	camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 1, 5000000);
-         
-                        //TODO: must be replace by automatic camera postion initialization
-			//by using lon/lat
 			camera.position.set(4201066.709676039,165839.9307729964, 4780241.631086124);
-            //            camera.position.set(-3307.55517578125,5222.22021484375, 3658.525634765625);
-			//change up to north/z
-			//change up axis does not change orbitcontrol 
-			//when we have threejs version under 67
-			//camera.up.set( 0, 0, 1 );
                         
                       //  var target = new THREE.Vector3(-3307.55517578125,5222.22021484375, 3558.525634765625);
                         var target = new THREE.Vector3(4201066.709676039,166839.9307729964, 4780241.631086124);
@@ -89,7 +81,6 @@ define (['THREE',
             		var axisHelper = new THREE.AxisHelper(1000);
         		scene.add( axisHelper );   
                         
-			//window.addEventListener('keydown', onKeyDown, false);
 			window.addEventListener('resize', resize, false);
                         
                         //this.setScene("models/res1_wgs84_local_coord.nexus");
@@ -130,14 +121,7 @@ GFX.prototype.startRenderer = function(){
 		renderer.preserveDrawingBuffer = true; //required to support .toDataURL()
 		renderer.alpha  = true;
 		renderer.logarithmicDepthBuffer = true;  
-
-									
 		renderer.setSize(width, height);
-                // OES_standard_derivaties used to compute mip level on mega texturing
-		//renderer.context.getExtension("OES_standard_derivatives");
-		//renderer.context.getExtension("OES_texture_float");
-		//renderer.context.getExtension("OES_texture_float_linear");
-
 		domContainer.appendChild(renderer.domElement);
 };
 

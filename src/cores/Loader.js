@@ -519,8 +519,8 @@ Loader.prototype = {
 		node.request = null;
             	node.status  = State._NODE_READY;
                 var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                 //var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
-                var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
+                var material = new THREE.MeshBasicMaterial( { color: color, wireframe: true, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
+                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
                 var mesh = new THREE.Mesh( geometryNode, material );
                 return mesh;
         },
@@ -550,6 +550,8 @@ Loader.prototype = {
                                mesh.name = key;
                                mesh.position.copy(this.position);
                                this._scene.add(mesh);
+                               
+                               this.add(mesh);
                         }       
                 }
             
