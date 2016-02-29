@@ -1,5 +1,5 @@
-define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './Queue' , './LRUCache', 'cmd/BinaryRequest'],
-function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, Queue, LRUCache, BinaryRequest){
+define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'cmd/BinaryRequest'],
+function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, BinaryRequest){
     
 
 
@@ -22,30 +22,22 @@ var Loader = function (scene) {
 	this._targetFps          = State.DEFAULT_TARGET_FPS;
 	this._maxPendingRequests = State.DEFAULT_MAX_PENDING_REQUESTS;
 	this._maxCacheSize       = State.DEFAULT_CACHE_SIZE;
-	//this._drawBudget         = State.DEFAULT_DRAW_BUDGET;
+	this.drawBudget         = State.DEFAULT_DRAW_BUDGET;
 	this._minDrawBudget      = State.DEFAULT_DRAW_BUDGET / 4;
-        //this._onUpdate           = null;
+        this._onUpdate           = null;
 	this._onSceneReady       = null;
 
-	//this._mmat = new THREE.Matrix4().identity(); 
-	//this._vmat = new THREE.Matrix4().identity();
-	//this._pmat = new THREE.Matrix4().identity();
         this._frustum = new THREE.Frustum();
-        
 	this._viewPoint   = new THREE.Vector3();
         
         this.LITTLE_ENDIAN_DATA = State.LITTLE_ENDIAN_DATA;
         this.PADDING            = State.PADDING; 
         
-        this._nodesIndexToRenderThisFrame = null;
-
 	this._reset();
 
-	//this._updateView();
 };
-
 Loader.prototype = Object.create(THREE.Object3D.prototype);
-
+Loader.prototype.constructor = Loader;
 
 Loader._sortPatchesFunction = function (a, b) {
 	return ((a.frame != b.frame) ? (b.frame - a.frame) : (b.error - a.error));
@@ -77,7 +69,8 @@ Loader.prototype = {
 		this._visitedNodes    = null;
 		this._blockedNodes    = null;
 		this._selectedNodes   = null;
-		this._drawSize        = 0; //number of triangle to be rendered
+
+                this._drawSize        = 0; //number of triangle to be rendered
 		this._rendered        = 0; //currently rendered triangles
 		this._estimatedTpS    = 200000; //in million triangles
 		this._cacheSize       = 0;
@@ -87,7 +80,7 @@ Loader.prototype = {
 
 		this._pendingRequests = 0;
 		this._candidateNodes  = null;
-		//this._redrawOnNewNodes = true;
+		this._redrawOnNewNodes = true;
 
 		var that = this;
                 
@@ -102,21 +95,16 @@ Loader.prototype = {
 	_requestHeader : function () {
 		var offset = 0;
 		var size   = Header.SIZEOF;
-
 		var that = this;
-		var url = this._url;
-		/**Safari PATCH**/
-		/**/if (navigator.userAgent.toLowerCase().indexOf('safari')!=-1 && navigator.userAgent.toLowerCase().indexOf('chrome')==-1) {
-		/**/  url = this._url + '?' + Math.random();
-		/**/}
-		/**Safari PATCH**/
-		var r = new BinaryRequest(url, {
-			range : [offset, offset+size-1],
-			onSuccess : function () {
-				that._handleHeader(r.buffer);
-				that._requestIndex();
-			}
-		});
+		var r = new XMLHttpRequest();
+		r.open('GET', this.url(), true);
+		r.responseType = 'arraybuffer';
+		r.setRequestHeader("Range", "bytes=" + offset + "-" + (offset + size -1));
+		r.onload = function () {
+			that._handleHeader(r.response);
+			that._requestIndex();
+		};
+		r.send();
 	},
 
 	_handleHeader : function (buffer) {
@@ -131,23 +119,19 @@ Loader.prototype = {
 
 	_requestIndex : function () {
 		var header = this._header;
-		var offset = Header.SIZEOF;
-		var size   = header.nodesCount * Node.SIZEOF + header.patchesCount * Patch.SIZEOF + header.texturesCount * Texture.SIZEOF;
+		var offset = Nexus.Header.SIZEOF;
+		var size   = header.nodesCount * Nexus.Node.SIZEOF + header.patchesCount * Nexus.Patch.SIZEOF + header.texturesCount * Nexus.Texture.SIZEOF;
 
 		var that = this;
-		var url = this._url;
-		/**Safari PATCH**/
-		/**/if (navigator.userAgent.toLowerCase().indexOf('safari')!=-1 && navigator.userAgent.toLowerCase().indexOf('chrome')==-1) {
-		/**/  url = this._url + '?' + Math.random();
-		/**/}
-		/**Safari PATCH**/
-		var r = new BinaryRequest(url, {
-			range : [offset, offset+size-1],
-			onSuccess : function () {
-				that._handleIndex(r.buffer);
-				that._openReady();
-			}
-		});
+		var r = new XMLHttpRequest();
+		r.open('GET', this.url(), true);
+		r.responseType = 'arraybuffer';
+		r.setRequestHeader("Range", "bytes=" + offset + "-" + (offset + size -1));
+		r.onload = function () {
+			that._handleIndex(r.response);
+			that._openReady();
+		}
+		r.send();
 	},
 
 	_handleIndex : function (buffer) {
@@ -175,14 +159,16 @@ Loader.prototype = {
 			var node = nodes[i];
 			node.status      = State._NODE_NONE;
 			node.request     = null;
+                        node.vbo         = null; //TODO: using THREE.Mesh/THREE.BufferGeometry
+                        node.ibo         = null;
 			node.color       = new THREE.Color();
 			node.renderError = 0.0;
 			node.renderFrame = 0;
 		}
 
-		this._cachedNodes  = new LRUCache(nodesCount);
+		this._cachedNodes  = [ ];
 		this._readyNodes   = [ ];
-		this._pendingNodes = [ ];
+		//this._pendingNodes = [ ];
 
 		var nodesCount = this._header.nodesCount;
 		this._visitedNodes  = new Uint8Array(nodesCount);  //Loader.BoolArray(nodesCount);
@@ -203,23 +189,15 @@ Loader.prototype = {
 		}
 	},
 
-	
-	get onSceneReady() {
-		return this._onSceneReady;
+	url: function() {
+		var url = this._url;
+		/**Safari PATCH**/
+		/**/if (sayswho()[0]==='Safari' && sayswho()[1]!=='9') 
+		/**/  url = this._url + '?' + Math.random();
+		/**Safari PATCH**/
+		return url;
 	},
-
-	set onSceneReady(f) {
-		this._onSceneReady = f;
-	},
-/*
-	get onUpdate() {
-		return this._onUpdate;
-	},
-
-	set onUpdate(f) {
-		this._onUpdate = f;
-	},
-*/
+        
 	get status() {
 		return this._status;
 	},
@@ -236,17 +214,13 @@ Loader.prototype = {
 		return (this._status == State.STATUS_OPEN);
 	},
 
-	get url() {
-		return this._url;
-	},
-
 	get isReady() {
 		return this.isOpen;
 	},
 
 	get datasetCenter() {
-		if (!this.isReady) return [0, 0, 0];
-		return this._header.sphere.center.slice(0, 3);
+		if (!this.isReady) return new THREE.Vector3();
+		return this._header.sphere.center;
 	},
 
 	get datasetRadius() {
@@ -296,79 +270,255 @@ Loader.prototype = {
 		this._reset();
 	},
 
+	_updateCache : function () {
+		var readyNodes = this._readyNodes;
+		if (readyNodes.length <= 0) return;
+
+		var cachedNodes = this._cachedNodes;
+
+		console.log('upateCache', readyNodes);
+
+		var newCache = cachedNodes.concat(readyNodes);
+		newCache.sort(this._sortNodeCacheFunction);
+
+		var maxSize = this._maxCacheSize;
+		var size    = 0;
+
+		var firstVictim = -1;
+		var newNodes  = [ ];
+
+		for (var i=0, n=newCache.length; i<n; ++i) {
+			var node  = newCache[i];
+			var nsize = node.lastByte - node.offset + 1;
+			if ((size + nsize) > maxSize) {
+				firstVictim = i;
+				break;
+			}
+			if (node.request) {
+				newNodes.push(node);
+			}
+			else {
+				size += nsize;
+			}
+		} //end newCache
+
+		if (firstVictim >= 0) {
+			for (var i=firstVictim, n=newCache.length; i<n; ++i) {
+				var node = newCache[i];
+				if (node.vbo) {
+					node.vbo.dispose(); // node.vbo.destroy();
+					node.vbo = null;
+				}
+				/*if (node.ibo) {
+					node.ibo.destroy();
+					node.ibo = null;
+				}*/
+				node.request = null;
+				node.buffer = null;
+				node.status  = State._NODE_NONE;
+			}
+			newCache = newCache.slice(0, firstVictim);
+		}
+
+		var vertexStride = this._header.signature.vertex.byteLength;
+		var faceStride   = this._header.signature.face.byteLength;
+		var littleEndian = State.LITTLE_ENDIAN_DATA;
+		//var gl           = this._gl;
+
+		for (var i = 0, n = newNodes.length; i < n; ++i) {
+			var node    = newNodes[i];
+			//console.log("loading node: " + node.index);
+			var compressed = Signature.MECO + Signature.CTM1 + Signature.CTM2;
+
+			if(Debug.worker && this._header.signature.flags & compressed) {
+				var request = node.request;
+				var buffer = request.response;
+				var sig = {
+					texcoords: this._header.signature.vertex.hasTexCoord,
+					normals: this._header.signature.vertex.hasNormal,
+					colors:  this._header.signature.vertex.hasColor,
+					indices: this._header.signature.face.hasIndex
+				};
+				var _node = {
+					nvert: node.verticesCount,
+					nface: node.facesCount,
+					firstPatch: 0, 
+					lastPatch: node.lastPatch - node.firstPatch,
+					buffer: node.request.response
+				};
+				var p = [];
+				for(var k = node.firstPatch; k < node.lastPatch; k++)
+					p.push(this._patches.items[k].lastTriangle);
+
+				if(this._header.signature.flags & Signature.MECO) {
+					var now = window.performance.now();
+					var coder = new MeshCoder(sig, _node, p);
+					node.buffer = coder.decode(buffer);
+					var elapsed = window.performance.now() - now;
+
+					console.log("Z Time: " + elapsed + " Size: " + size + " KT/s: " + (node.facesCount/(elapsed)) + " Mbps " + (8*1000*node.buffer.byteLength/elapsed)/(1<<20));
 	
+				} else {
+					node.buffer = ctmDecode(sig, _node, p);
+				}
+			}
+
+			var nv = node.verticesCount;
+			var nf = node.facesCount;
+
+			var vertexOffset = 0;
+			var vertexSize   = nv * vertexStride;
+			var faceOffset   = vertexOffset + vertexSize;
+			var faceSize     = nf * faceStride;
+
+			var vertices = new Uint8Array(node.buffer, vertexOffset, vertexSize);
+			var indices  = new Uint8Array(node.buffer, faceOffset,   faceSize);
+
+			//node.vbo = new SglVertexBuffer (gl, {data : vertices});
+                        node.vbo   =  new THREE.BufferGeometry();
+                        node.vbo.setDrawRange( 0, nv );
+			node.vbo.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true ) 
+			if (this._header.signature.face.hasIndex)
+				//node.ibo = new SglIndexBuffer  (gl, {data : indices });
+                                node.vbo.setIndex(new THREE.BufferAttribute( indices, 1));    
+    
+			node.request = null;
+			//STEP 1: if textures not ready this will be delayed
+			var isReady = true;	
+			var patches      = this._patches.items;
+			for(var k = node.firstPatch; k < node.lastPatch; ++k) {
+				var patch = this._patches.items[k];
+				if(patch.texture == 0xffffffff) continue;
+				if(this._textures.items[patch.texture].status != State._NODE_READY)
+					isReady = false;
+			}
+			if(isReady)
+				node.status  = State._NODE_READY;
+
+			var nsize = node.lastByte - node.offset + 1;
+			size += nsize;
+		}
+
+		this._readyNodes  = [ ];
+		this._cachedNodes = newCache;
+		this._cacheSize   = size;
+	},
+        
+        _hierarchyVisit_isVisible : function (center, radius) {
+		if (Debug.culling) return true;
+		var sphere = new THREE.Sphere(center,radius);
+		return this._frustum.intersectsSphere(sphere);
+	},
        
-        _hierarchyVisit_isVisible : function (n) {
-            var node   = this._nodes.items[n];
-    	    var sphere = node.sphere;
-            return this._frustum.intersectsSphere(sphere);
+        _hierarchyVisit_nodeError : function (n) {
+		var node   = this._nodes.items[n];
+		var sphere = node.sphere;
+                // inline distance computation
+		var a = sphere.center;
+		var b = this._viewPoint;
+		var dist = a.distanceTo(b) - sphere.radius; //must be node.tightRadius???
+                // end inline
+		if (dist < 0.1) dist = 0.1;
+
+		var res   = this._resolution * dist;
+		var error = node.error / res;
+
+		if (!this._hierarchyVisit_isVisible(sphere.center, sphere.radius)) {
+			error /= 1000.0;
+		}
+
+		return error;
+	},
+
+        _hierarchyVisit_insertNode : function (n, visitQueue) {
+		if (n == this._nodes.sink) return;
+
+		if (this._visitedNodes[n]) return;
+		this._visitedNodes[n] = 1;
+
+		var error = this._hierarchyVisit_nodeError(n);
+		if(error < this.targetError*0.8) return;  //2% speed TODO check if needed
+
+		var node  = this._nodes.items[n];
+		node.renderError = error;
+		node.renderFrame = this._frame;
+
+		var nodeData = {
+			node  : node,
+			index : n
+		};
+		visitQueue.push(nodeData);
 	},
         
-        
-        _hierarchyVisit_nodeError: function (n) {
-            var node   = this._nodes.items[n];
-    	    var sphere = node.sphere;
-            // inline distance computation
-	    var dist = sphere.center.distanceTo(this._viewPoint) - node.tightRadius;//sphere.radius;
 
-            // end inline
-	    if (dist < 0.01) dist = 0.01;
+        _hierarchyVisit_expandNode : function (nodeData) {
 
-	    return this._resolution *node.error/dist;
+		var node  = nodeData.node;
+		if(node.renderError < this.targetError) {
+//			console.log("Stop becaouse of error: " + node.renderError + " < " + this.targetError);
+			return false;
+		}
+		if(this._drawSize > this.drawBudget) {
+//			console.log("Stop because of draw budget: " + this._drawSize  + " > " + this.drawBudget);
+			return false;
+		}
+
+		var sphere = node.sphere;
+		if(this._hierarchyVisit_isVisible(sphere.center, node.tightRadius))
+			this._drawSize += node.verticesCount/2; //faces
+
+		if(node.status !== State._NODE_READY) {
+//			console.log("Stop because node not ready:" + node.status);
+//			here: mark a redraw when new nodes available.
+			this._redrawOnNewNodes = true;
+			return false;
+		}
+		return true;
 	},
-
-        _hierarchyVisit_insertNode : function (n, parent, visitQueue) {
-                var node    = this._nodes.items[n];
-            	var patches = this._patches.items;
-
-                if(this._hierarchyVisit_isVisible(n)){
-                	var error = this._hierarchyVisit_nodeError(n);
-                        //if error is less than SSE
-                        //so render this node
-                        //console.log(error,n)
-                        if(error < this._targetError*0.8) {
-                                var node  = this._nodes.items[n];
-                                node.renderError = error;
-                                node.renderFrame = this._frame;
-                               
-                                node.index = n;
-                                node.parent = parent;
-                                visitQueue.enqueue(node);
-                                return;
-                        }else{ //if not render its childs
-                                for(var i = node.firstPatch; i < node.lastPatch; ++i) {
-                                    var patch = patches[i];
-                                    var child = patch.node;
-                                    this._hierarchyVisit_insertNode(child, n, visitQueue);
-                                }            
-                        }//end SSE
-                }
-	},
-
+      
 
 	_hierarchyVisit : function () {
-                //initializz visit queue for this frame
-		var visitQueue    = new Queue();
-        	var candidatesCount = 0;
-		this._candidateNodes = [ ];
-                this._nodesIndexToRenderThisFrame = [];
-                //start with root, if tile is not in frustum, does nothing
-                //otherwise prepare candidates for loading?
-		this._hierarchyVisit_insertNode(0, null, visitQueue);
+            if(Debug.extract === true)
+                		return;
+		this._redrawOnNewNodes = false;
 
-                var candidateNodes = this._candidateNodes;
-                var nodesIndexToRenderThisFrame = this._nodesIndexToRenderThisFrame;
+		var visitQueue    = new PriorityQueue();
+
+		var nodesCount = this._nodes.length;
+		for(var i = 0; i < nodesCount; i++) {
+			this._visitedNodes[i] = 0; 
+			this._blockedNodes[i] = 0;
+			this._selectedNodes[i] = 0;
+		}
+		this._hierarchyVisit_insertNode(0, visitQueue);
+
+		//var nodes = this._nodes.items;
+
+		var candidatesCount = 0;
+		this._candidateNodes = [ ];
+		var candidateNodes = this._candidateNodes;
+
 		this.currentError = 1e20;
+		this._drawSize = 0;
 		var count = 0;
-                
-		while (visitQueue.getLength() && (count < this._maxPendingRequests)) {
-			var node = visitQueue.dequeue();
-			//var n        = node.index;
+		while (visitQueue.size() && (count < this._maxPendingRequests)) {
+			var nodeData = visitQueue.pop();
+			var n        = nodeData.index;
+			var node     = nodeData.node;
 			if ((candidatesCount < this._maxPendingRequests) && (node.status == State._NODE_NONE)) {
 				candidatesCount++;
-                    		candidateNodes.push(node);
-                                nodesIndexToRenderThisFrame.push(node.index);
+				candidateNodes.push(node);
 			}
+			var blocked = this._blockedNodes[n] || !this._hierarchyVisit_expandNode(nodeData);
+			if (blocked) {
+				count++;
+			}
+			else {
+				this._selectedNodes[n] = 1;
+				this.currentError = nodeData.node.renderError; 
+			}
+			
+			this._hierarchyVisit_insertChildren(n, visitQueue, blocked);
 		}
 	},
 
@@ -376,10 +526,13 @@ Loader.prototype = {
 		//compressed use worker:
 		var that = this;
 		return function () {
-			that._header.signature.flags & compressed
+//			console.log("received node: " + node.index);
+			node.request.buffer = node.request.response;
+
 			var compressed = Signature.MECO + Signature.CTM1 + Signature.CTM2;
 			if(!Debug.worker && that._header.signature.flags & compressed) {
 				var sig = {
+					texcoords: that._header.signature.vertex.hasTexCoord,
 					normals: that._header.signature.vertex.hasNormal,
 					colors:  that._header.signature.vertex.hasColor,
 					indices: that._header.signature.face.hasIndex
@@ -390,57 +543,167 @@ Loader.prototype = {
 					nface: node.facesCount,
 					firstPatch: 0, 
 					lastPatch: node.lastPatch - node.firstPatch,
-					buffer: node.request.buffer
+					buffer: node.request.response
 				};
 				var p = [];
 				for(var k = node.firstPatch; k < node.lastPatch; k++)
 					p.push(that._patches.items[k].lastTriangle);
 				if(that._header.signature.flags & Signature.MECO)
-					that._worker.postMessage({signature:sig, node:_node, patches:p, status :'processing'});
+					that._worker.postMessage({signature:sig, node:_node, patches:p });
 			} else {
-          				
-                                        that._workerFinished({data: {index:node.index, buffer:node.request.buffer}});
-    			}
+				that._workerFinished({data: {index:node.index, buffer:node.request.response}});
+			}
 		};
 	},
 
+
 	_workerFinished: function(_node) {
-                if(typeof(_node.data) == "string") return; 
 		var node = this._nodes.items[_node.data.index];
 		node.buffer = _node.data.buffer;
 		this._readyNodes.push(node);
-                this._cachedNodes.put(node.index,node);
-       	        this._signalUpdate();
+		if(this._redrawOnNewNodes) { //redraw only if new nodes might improve rendering
+			this._signalUpdate();
+		}
+	},
+        
+        _createTextureHandler : function (tex) {
+		var that = this;
+
+		return function () {
+			//TODO USE REF COUNTER INSTeAD OF LIST BOTH FOR NODES AND FOR TEXTURES
+			var blob = tex.request.response; 
+			var urlCreator = window.URL || window.webkitURL;
+			tex.img = document.createElement('img');
+			tex.img.onerror = function(e) { console.log("Failed loading texture."); };
+			tex.img.src = urlCreator.createObjectURL(blob);
+
+			tex.img.onload = function() { 
+				urlCreator.revokeObjectURL(tex.img.src); 
+
+				var gl = that._gl;
+				tex.texture = gl.createTexture();
+				gl.bindTexture(gl.TEXTURE_2D, tex.texture);
+                        	var s = gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex.img);
+                                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+				gl.bindTexture(gl.TEXTURE_2D, null);
+
+				tex.status = State._NODE_READY;
+				//find all nodes pending
+				for(var i = 0; i < tex.nodes.length; i++) {
+					var node = tex.nodes[i];
+					if(node.vbo === null) continue; //not loaded still
+					var isReady = true;
+					for(var k = node.firstPatch; k < node.lastPatch; ++k) {
+						var patch = that._patches.items[k];
+						if(patch.texture == 0xffffffff) continue;
+						var t = that._textures.items[patch.texture];
+						if(t.status != State._NODE_READY) {
+							isReady = false;
+							break;
+						}
+					} 
+					if(isReady) {
+						node.status = State._NODE_READY;
+					}
+				}
+			};
+		};
 	},
 
 	_requestNodes : function () {
-            
+		if(Debug.request) {
+			this._candidateNodes = [];
+			return;
+		}
 		var candidateNodes = this._candidateNodes;
 		if (candidateNodes.length <= 0) return;
 
-                //first find in cache if node have already loaded yet???
-                //if not, save it to nodesToResquest
-		var nodesToRequest = [];
+		var cachedNodes = this._cachedNodes.slice();
+		cachedNodes.sort(this._sortNodeCacheFunction);
+
+		var nodesToRequest = 0;
+		var cacheSize = this._cacheSize;
 		for (var i=0, n=candidateNodes.length; i<n; ++i) {
 			var c = candidateNodes[i];
-       			if(this._cachedNodes.get(c.index) === undefined){
-                            nodesToRequest.push(c);
-                        }
+			var s = this._maxCacheSize - cacheSize;
+			var freed = 0;
+			var csize = c.lastByte - c.offset + 1;
+			var k = cachedNodes.length;
+			if (s < csize) {
+				for (var j=cachedNodes.length-1; j>=0; --j) {
+					var p = cachedNodes[j];
+					var psize = p.lastByte - p.offset + 1;
+					k = j;
+					if (this._sortNodeCacheFunction(c, p) >= 0) break;
+					s += psize;
+					freed += psize;
+					if (s >= csize) break;
+				}
+			}
+
+			if (s >= csize) {
+				nodesToRequest++;
+				cachedNodes = cachedNodes.slice(0, k);
+				cachedNodes.push(c);
+				cacheSize -= freed;
+				cacheSize += csize;
+			}
+			else {
+				break;
+			}
 		}
 
-		var url = this._url;
-		for (var i=0; i< nodesToRequest.length; ++i) {
-			/**Safari PATCH**/
-			/**/if (navigator.userAgent.toLowerCase().indexOf('safari')!=-1 && navigator.userAgent.toLowerCase().indexOf('chrome')==-1) {
-			/**/  url = this._url + '?' + Math.random();
-			/**/}
-			/**Safari PATCH**/
-			var node   = nodesToRequest[i];
+		var that = this;
+		var url = this.url();
+		for (var i=0; i<nodesToRequest; ++i) {
+			var node   = candidateNodes[i];
 			node.status  = State._NODE_PENDING;
-			node.request = new BinaryRequest(url, {
-				range : [node.offset, node.lastByte],
-				onSuccess : this._createNodeHandler(node)
-			});
+			node.request = new XMLHttpRequest();
+			node.request.open('GET', url, true);
+			node.request.responseType = 'arraybuffer';
+			node.request.setRequestHeader("Range", "bytes=" + node.offset + "-" + node.lastByte);
+			node.request.onload = this._createNodeHandler(node);
+			node.request.onerror= function () { //NODES RECOVERY DRAFT
+				for (var j=0, n=candidateNodes.length; j<n; ++j) 
+					if(candidateNodes[j].requestError) return;
+				that._candidateNodes = candidateNodes;
+				for (var j=0, n=candidateNodes.length; j<n; ++j) 
+					candidateNodes[j].requestError = true;
+				that._requestNodes();
+			};
+			node.request.onabort= function () { //NODES RECOVERY DRAFT
+				for (var j=0, n=candidateNodes.length; j<n; ++j) 
+					if(candidateNodes[j].requestCancel) return;
+				that._candidateNodes = candidateNodes;
+				for (var j=0, n=candidateNodes.length; j<n; ++j) 
+					candidateNodes[j].requestCancel = true;
+				that._requestNodes();
+			};
+			node.request.send();
+
+			//check for textures
+			var patches      = this._patches.items;
+			for(var i = node.firstPatch; i < node.lastPatch; ++i) {
+				var patch = patches[i];
+				if(patch.texture == 0xffffffff) continue;
+				var tex = this._textures.items[patch.texture];
+				var that = this;
+				if(tex.status == State._NODE_NONE) {
+					tex.img = new Image;
+					tex.status = State._NODE_PENDING;
+					tex.request = new XMLHttpRequest();
+					tex.request.open('GET', url, true);
+					tex.request.responseType = 'blob';
+					tex.request.setRequestHeader("Range", "bytes=" + tex.offset + "-" + tex.lastByte);
+					tex.request.onload = this._createTextureHandler(tex);
+					tex.request.send();
+				}
+				//add a 'wakeup call'
+				tex.nodes.push(node);
+			}
 		}
 		this._candidateNodes = [];
 	},
@@ -469,15 +732,132 @@ Loader.prototype = {
 
         update : function(camera, renderer){
                 if (!this.isOpen) return;
-		//if (this.inBegin) return;
-		//this._inBegin = true;
 		if (this._header.nodesCount <= 0) return;
-		//this._beginRender();
+
                 this._updateView(camera, renderer);
-		//this._updateCache();
+		this._updateCache();
 		this._hierarchyVisit();
 		this._requestNodes();
+                this._render();
         },
+
+        _render : function () {
+		var order = [0, 3, 1, 2, 4];
+
+		var vertexStride       = this._header.signature.vertex.byteLength;
+		var vertexAttributes   = this._header.signature.vertex.attributes;
+		var vertexAttribsCount = this._header.signature.vertex.lastAttribute + 1;
+
+		for (var i=0; i<4; ++i) {
+			if (vertexAttributes[order[i]].isNull) continue;
+			//gl.enableVertexAttribArray(order[i]);
+		}
+
+		//gl.vertexAttrib4fv(VertexElement.COLOR, [0.8, 0.8, 0.8, 1.0]);
+                /*
+		if (Debug.nodes) {
+			if (!vertexAttributes[VertexElement.COLOR].isNull) {
+				gl.disableVertexAttribArray(VertexElement.COLOR);
+			}
+		}
+                */    
+		var nodes = this._nodes.items;
+		var patches = this._patches.items;
+		var selectedNodes = this._selectedNodes;
+		var nodesCount = nodes.length;
+		this._rendered = 0;
+
+		var last_texture = -1;
+		for (var i=0; i<nodesCount; ++i) {
+			if (!selectedNodes[i]) continue;
+
+			var node    = nodes[i];
+			if(this._header.signature.face.hasIndex) {
+				var skipped = true;
+				for (var p = node.firstPatch; p < node.lastPatch; ++p) {
+					var patch = patches[p];
+					if (!selectedNodes[patch.node]) {
+						skipped = false;
+						break;
+					}
+				}
+				if (skipped) continue;
+			}
+
+			if(!this._hierarchyVisit_isVisible(node.sphere.center, node.tightRadius)) 
+				continue;
+                        /* 
+                         Buffer is already binded when we create new BufferGeometry    
+			node.vbo.bind();
+			if(node.ibo) {
+				node.ibo.bind();
+			}*/
+
+			var attribOffset = 0;
+			//order is needed because attributes are oredere by vertex normal colors tex, while data inverts tex and normal for alignment
+			for (var j=0; j<4; ++j) { //vertexAttribsCount; ++j) {
+				var attrib = vertexAttributes[order[j]];
+				if (attrib.isNull) continue;
+				//gl.vertexAttribPointer(order[j], attrib.size, attrib.glType, attrib.normalized, attrib.stride, attrib.offset + attribOffset);
+				attribOffset += attrib.offset + attrib.stride * node.verticesCount;
+			}
+
+			if (Debug.nodes) {
+				//gl.vertexAttrib4fv(VertexElement.COLOR, node.color);
+			}
+			if(!this._header.signature.face.hasIndex) {
+                            var pointsize = Math.floor(0.30*node.renderError);
+                            if(pointsize > 3) pointsize = 3;
+				//gl.vertexAttrib1fv(VertexElement.DATA0, [pointsize]);
+			}
+			if (Debug.draw) continue;
+
+			//point cloud do not need patches
+			if(!this._header.signature.face.hasIndex) {
+				var fraction = (node.renderError/this.currentError - 1);
+				if(fraction > 1) fraction = 1;
+
+				var count = fraction * (node.verticesCount);
+				//gl.drawArrays(gl.POINTS, 0, count);
+				this._rendered += count;
+				continue;
+			}
+
+			//concatenate renderings to remove useless calls. except we have textures.
+			var first = 0;
+			var last = 0;
+			for (var p = node.firstPatch; p < node.lastPatch; ++p) {
+				var patch = patches[p];
+
+				if(!selectedNodes[patch.node]) { //skip this patch
+					last = patch.lastTriangle;
+					if(p < node.lastPatch-1) //if textures we do not join. TODO: should actually check for same texture of last one. 
+						continue;
+				} 
+				if(last > first) {
+					//here either we skip or is the last node
+					
+					if(patch.texture != 0xffffffff && patch.texture != last_texture) { //bind texture
+						var tex = this._textures.items[patch.texture].texture;
+						//gl.activeTexture(gl.TEXTURE0);
+						//gl.bindTexture(gl.TEXTURE_2D, tex);
+						//var error = gl.getError(); 
+					}
+					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
+					this._rendered += last - first;
+				}
+				first = patch.lastTriangle;
+			}
+		} 
+
+		for (var i = 0; i < 4; ++i) {
+			if (vertexAttributes[order[i]].isNull) continue;
+			//gl.disableVertexAttribArray(order[i]);
+		}
+
+		//SglVertexBuffer.unbind(gl);
+		//SglIndexBuffer.unbind(gl);
+	},
 
 	_beginRender : function(){
                 var sceneChilds = this._scene.children;
