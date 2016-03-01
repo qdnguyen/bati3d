@@ -1,11 +1,10 @@
-define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'cmd/BinaryRequest'],
-function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, BinaryRequest){
+define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'./saywho'],
+function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, sayswho){
     
 
 
-
 var Debug = {
-	nodes: false,    //color each node
+	nodes: true,    //color each node
 	culling: false,  //visibility culling disabled
 	draw: false,     //final rendering call disabled
 	extract: false,  //no extraction
@@ -119,8 +118,8 @@ Loader.prototype = {
 
 	_requestIndex : function () {
 		var header = this._header;
-		var offset = Nexus.Header.SIZEOF;
-		var size   = header.nodesCount * Nexus.Node.SIZEOF + header.patchesCount * Nexus.Patch.SIZEOF + header.texturesCount * Nexus.Texture.SIZEOF;
+		var offset = Header.SIZEOF;
+		var size   = header.nodesCount * Node.SIZEOF + header.patchesCount * Patch.SIZEOF + header.texturesCount * Texture.SIZEOF;
 
 		var that = this;
 		var r = new XMLHttpRequest();
@@ -183,7 +182,7 @@ Loader.prototype = {
 	},
 
 	_signalUpdate : function () {
-		var upd = this._onUpdate.bind(this);
+		var upd = this._onUpdate;
 		if (upd) {
 			upd();
 		}
@@ -306,8 +305,9 @@ Loader.prototype = {
 			for (var i=firstVictim, n=newCache.length; i<n; ++i) {
 				var node = newCache[i];
 				if (node.vbo) {
-					node.vbo.dispose(); // node.vbo.destroy();
-					node.vbo = null;
+					node.vbo.geometry.dispose(); // node.vbo.destroy();
+					node.vbo.material.dispose();
+                                        node.vbo = null;
 				}
 				/*if (node.ibo) {
 					node.ibo.destroy();
@@ -322,7 +322,7 @@ Loader.prototype = {
 
 		var vertexStride = this._header.signature.vertex.byteLength;
 		var faceStride   = this._header.signature.face.byteLength;
-		var littleEndian = State.LITTLE_ENDIAN_DATA;
+		//var littleEndian = State.LITTLE_ENDIAN_DATA;
 		//var gl           = this._gl;
 
 		for (var i = 0, n = newNodes.length; i < n; ++i) {
@@ -375,17 +375,22 @@ Loader.prototype = {
 			var indices  = new Uint8Array(node.buffer, faceOffset,   faceSize);
 
 			//node.vbo = new SglVertexBuffer (gl, {data : vertices});
-                        node.vbo   =  new THREE.BufferGeometry();
-                        node.vbo.setDrawRange( 0, nv );
-			node.vbo.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true ) 
+                        var color = new THREE.Color().setHex( Math.random() * 0xffffff );
+                        var material  = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
+                        var geometry  = new THREE.BufferGeometry();
+                        node.vbo      = new THREE.Mesh(geometry, material );
+                        node.vbo.name = node.index;
+                        this._scene.add(node.vbo);
+                        //node.vbo.geometry.setDrawRange( 0, nf );
+			node.vbo.geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true )
 			if (this._header.signature.face.hasIndex)
 				//node.ibo = new SglIndexBuffer  (gl, {data : indices });
-                                node.vbo.setIndex(new THREE.BufferAttribute( indices, 1));    
+                                node.vbo.geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
     
 			node.request = null;
 			//STEP 1: if textures not ready this will be delayed
 			var isReady = true;	
-			var patches      = this._patches.items;
+			//var patches      = this._patches.items;
 			for(var k = node.firstPatch; k < node.lastPatch; ++k) {
 				var patch = this._patches.items[k];
 				if(patch.texture == 0xffffffff) continue;
@@ -429,6 +434,20 @@ Loader.prototype = {
 
 		return error;
 	},
+
+	_hierarchyVisit_insertChildren : function (n, visitQueue, block) {
+		var nodes        = this._nodes.items;
+		var node         = nodes[n];
+		var patches      = this._patches.items;
+		var blockedNodes = this._blockedNodes;
+		for(var i = node.firstPatch; i < node.lastPatch; ++i) {
+			var patch = patches[i];
+			var child = patch.node;
+			if (block) blockedNodes[child] = 1;
+			this._hierarchyVisit_insertNode(child, visitQueue);
+		}
+	},
+
 
         _hierarchyVisit_insertNode : function (n, visitQueue) {
 		if (n == this._nodes.sink) return;
@@ -561,6 +580,7 @@ Loader.prototype = {
 		var node = this._nodes.items[_node.data.index];
 		node.buffer = _node.data.buffer;
 		this._readyNodes.push(node);
+                
 		if(this._redrawOnNewNodes) { //redraw only if new nodes might improve rendering
 			this._signalUpdate();
 		}
@@ -826,6 +846,9 @@ Loader.prototype = {
 			//concatenate renderings to remove useless calls. except we have textures.
 			var first = 0;
 			var last = 0;
+                        
+                        //clear last drawcall
+                        node.vbo.geometry.clearGroups();
 			for (var p = node.firstPatch; p < node.lastPatch; ++p) {
 				var patch = patches[p];
 
@@ -844,10 +867,17 @@ Loader.prototype = {
 						//var error = gl.getError(); 
 					}
 					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
+                                        console.log(first,last);
+                                        node.vbo.geometry.setDrawRange( first, last);
+                                        //node.vbo.geometry.addGroup( first, last, 0);
 					this._rendered += last - first;
+                                       
 				}
 				first = patch.lastTriangle;
 			}
+                        
+                        node.vbo.geometry.attributes.position.needsUpdate = true;
+                        //mesh.geometry.attributes.color.needsUpdate = true;
 		} 
 
 		for (var i = 0; i < 4; ++i) {
@@ -857,106 +887,7 @@ Loader.prototype = {
 
 		//SglVertexBuffer.unbind(gl);
 		//SglIndexBuffer.unbind(gl);
-	},
-
-	_beginRender : function(){
-                var sceneChilds = this._scene.children;
-                for( var i = sceneChilds.length - 1; i >= 0; i--) {
-                    var child = sceneChilds[i];
-                    //Must use remove to clean GPU memory
-                    //Loader.js must be inherit from THREE.Mesh so 
-                    // we can do check THREE.XXXX
-                    if(child instanceof THREE.Mesh){
-                          child.visible = false; 
-                    }
-                }
-        },
-        
-        _createMesh : function (sig, node){
-                var offset = 0;
-		var nv = node.verticesCount;
-		var nf = node.facesCount;
-
-                var size = node.verticesCount*12; //float
-                var positions = new Float32Array(node.buffer, offset, nv*3);
-                var normals, colors, faces;
-                if(sig.normals) {
-                                normals = new Int16Array(node.buffer, size, nv*3);
-                                size += nv*6; //short
-                }
-                if(sig.colors) {
-                                colors = new Uint8ClampedArray(node.buffer, size, nv*4);
-                                size += nv*4; //chars
-                }
-                if(sig.indices) {
-                                faces = new Uint16Array(node.buffer, size, nf * 3);
-                                size += nf*6; //short
-                }
-
-                var geometryNode   =  new THREE.BufferGeometry();
-
-                geometryNode.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-                geometryNode.setIndex(new THREE.BufferAttribute( faces, 1));    
-
-		node.request = null;
-            	node.status  = State._NODE_READY;
-                var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                 var material = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
-                //var material = new THREE.MeshPhongMaterial( { color: color, specular: 0x009900,  shininess: 30, shading: THREE.FlatShading , transparent : false, opacity :0.5} );
-                var mesh = new THREE.Mesh( geometryNode, material );
-                return mesh;
-        },
-        
-        _onUpdate : function () {
-                 //invisibleAll();
-                 var sig = {
-                                    normals: this._header.signature.vertex.hasNormal,
-				    colors:  this._header.signature.vertex.hasColor,
-				    indices: this._header.signature.face.hasIndex
-                           };
-                    
-                var nodesIndex = this._nodesIndexToRenderThisFrame;
-                    
-                for(var i = 0; i < nodesIndex.length; i++){
-                        //this variable is never used.
-                        var key  = nodesIndex[i];
-                        var mesh = this._scene.getObjectByName(key);
-                        //if node have not been rendered yet in scene
-                        if(!mesh){
-                               var node = this._cachedNodes.get(key);
-                               if(!node) continue;
-                               //set visibility of parent or children in scene
-                               this._setVisibilityParentAndChild(key);
-                               //create and add mesh into scene
-                               mesh = this._createMesh(sig, node);
-                               mesh.name = key;
-                               this._scene.add(mesh);
-                        }       
-                }
-            
-            //reset one time render have finished
-            this._nodesIndexToRenderThisFrame = [];
-        },
-        
-        _setVisibilityParentAndChild  : function (key){
-                var node    = this._nodes.items[key];
-            	var patches = this._patches.items;
-                
-                var parentKey = node.parent;
-                var parent = this._scene.getObjectByName(parentKey);
-                //invisible parent before add its child
-                if(parent) {parent.visible = false; console.log('remove parent :', parentKey, 'of ', key)}
-                
-                for(var i = node.firstPatch; i < node.lastPatch; ++i) {
-                        var patch    = patches[i];
-                        var childKey = patch.node;
-                        var child = this._scene.getObjectByName(childKey);
-                        if(child) {child.visible = false; console.log('remove children :', childKey, 'of ', key)}
-                }     
-        }
-	
-        
-        
+	}    
 };
 
 return Loader;
