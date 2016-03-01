@@ -868,8 +868,8 @@ Loader.prototype = {
 					}
 					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
                                         //console.log(first,last);
-                                        node.vbo.geometry.setDrawRange( first*3, last*3);
-                                        //node.vbo.geometry.addGroup( first, last, 0);
+                                        node.vbo.geometry.setDrawRange( first*3, (last - first) * 3);
+                                        //node.vbo.geometry.addGroup( first*3, last*3, 0);
 					this._rendered += last - first;
                                        
 				}
