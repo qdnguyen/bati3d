@@ -421,14 +421,14 @@ Loader.prototype = {
                 // inline distance computation
 		var a = sphere.center;
 		var b = this._viewPoint;
-		var dist = a.distanceTo(b) - sphere.radius; //must be node.tightRadius???
+		var dist = a.distanceTo(b) - sphere.radius;//must be node.tightRadius???
                 // end inline
 		if (dist < 0.1) dist = 0.1;
 
 		var res   = this._resolution * dist;
 		var error = node.error / res;
 
-		if (!this._hierarchyVisit_isVisible(sphere.center, sphere.radius)) {
+		if (!this._hierarchyVisit_isVisible(sphere.center, sphere.radius)) {//sphere.radius
 			error /= 1000.0;
 		}
 
@@ -867,8 +867,8 @@ Loader.prototype = {
 						//var error = gl.getError(); 
 					}
 					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
-                                        console.log(first,last);
-                                        node.vbo.geometry.setDrawRange( first, last);
+                                        //console.log(first,last);
+                                        node.vbo.geometry.setDrawRange( first*3, last*3);
                                         //node.vbo.geometry.addGroup( first, last, 0);
 					this._rendered += last - first;
                                        

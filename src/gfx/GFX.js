@@ -15,6 +15,7 @@ define (['THREE',
   var scene    = undefined;
   var renderer = undefined;
   var camera   = undefined;
+  var cameraPerspectiveHelper = undefined;
   var controls = undefined;
   var light    = undefined;
   var occluder = undefined;
@@ -66,18 +67,20 @@ define (['THREE',
 			// create a scene
         		scene = new THREE.Scene();
 			// put a camera in the scene
-                	camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 1, 5000000);
+                	camera = new THREE.PerspectiveCamera(800, window.innerWidth / window.innerHeight, 1, 5000000);
          
+			//cameraPerspectiveHelper = new THREE.CameraHelper( camera );
+			//scene.add( cameraPerspectiveHelper );
                         //TODO: must be replace by automatic camera postion initialization
 			//by using lon/lat
 			//camera.position.set(4203240,168454, 4778260);
-                        camera.position.set(-3307.55517578125,5222.22021484375+100, 3658.525634765625);
+                        camera.position.set(-3307.55517578125,5222.22021484375, 3658.525634765625);
 			//change up to north/z
 			//change up axis does not change orbitcontrol 
 			//when we have threejs version under 67
 			//camera.up.set( 0, 0, 1 );
-                        
-                        var target = new THREE.Vector3(-3307.55517578125,5222.22021484375, 3500.525634765625);
+
+                        var target = new THREE.Vector3(-3307.55517578125,5222.22021484375, 3558.525634765625);
                         
                         camera.lookAt(target);
                         
