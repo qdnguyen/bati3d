@@ -53,16 +53,16 @@ Attribute._typeNormalized[Attribute.UNSIGNED_INT  ] = true;
 Attribute._typeNormalized[Attribute.FLOAT         ] = false;
 Attribute._typeNormalized[Attribute.DOUBLE        ] = false;
 
-Attribute.prototype = {
-	get isNull() {
+
+Attribute.prototype.isNull = function() {
 		return (this.type == Attribute.NONE);
-	},
+	};
 
-	get byteLength() {
+Attribute.prototype.getByteLength = function() {
 		return (Attribute._typeSizeMap[this.type] * this.size);
-	},
+	};
 
-	import : function (view, offset, littleEndian) {
+Attribute.prototype.import = function (view, offset, littleEndian) {
 		var s = 0;
 		this.type = view.getUint8(offset + s, littleEndian); s += Uint8Array.BYTES_PER_ELEMENT;
 		this.size = view.getUint8(offset + s, littleEndian); s += Uint8Array.BYTES_PER_ELEMENT;
@@ -73,8 +73,7 @@ Attribute.prototype = {
 		this.offset     = 0;
 
 		return s;
-	}
-};
+	};
 
 Attribute.SIZEOF = 2 * Uint8Array.BYTES_PER_ELEMENT;
 

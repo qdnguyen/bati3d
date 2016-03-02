@@ -1,5 +1,5 @@
-define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'./saywho'],
-function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, sayswho){
+define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'./saywho','./defineProperties'],
+function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, sayswho, defineProperties){
     
 
 
@@ -12,7 +12,18 @@ var Debug = {
 	worker: false    //no web workers
 };
 
+sortPatchesFunction = function (a, b) {
+	return ((a.frame != b.frame) ? (b.frame - a.frame) : (b.error - a.error));
+};
 
+sortNodesFunction = function (a, b) {
+	return a.node.renderError - b.node.renderError;
+};
+
+sortNodeCacheFunction = function (a, b) {
+	return ((a.renderFrame != b.renderFrame) ? (b.renderFrame - a.renderFrame) : (b.renderError - a.renderError));
+	//return b.renderError - a.renderError;
+};
 
 var Loader = function (scene) {
 	THREE.Object3D.call( this );
@@ -35,25 +46,14 @@ var Loader = function (scene) {
 	this._reset();
         
         this._materials = null;
-
+        //scene.add(this);
 };
+
 Loader.prototype = Object.create(THREE.Object3D.prototype);
 Loader.prototype.constructor = Loader;
 
-Loader._sortPatchesFunction = function (a, b) {
-	return ((a.frame != b.frame) ? (b.frame - a.frame) : (b.error - a.error));
-};
 
-Loader._sortNodesFunction = function (a, b) {
-	return a.node.renderError - b.node.renderError;
-};
-
-Loader._sortNodeCacheFunction = function (a, b) {
-	return ((a.renderFrame != b.renderFrame) ? (b.renderFrame - a.renderFrame) : (b.renderError - a.renderError));
-	//return b.renderError - a.renderError;
-};
-
-
+//defineProperties(Loader.prototype, {  
 Loader.prototype = {
 	_reset : function () {
 		this._status  = State.STATUS_NONE;
@@ -124,7 +124,7 @@ Loader.prototype = {
                 var materials = []; 
                 for(var i =0; i < this._header.patchesCount; i++){
                       var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                      materials.push(new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} ));
+                      materials.push(new THREE.MeshBasicMaterial( { color: color} ));//, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5
                 }
                 this._materials = new THREE.MultiMaterial(materials);
         },
@@ -141,7 +141,7 @@ Loader.prototype = {
 		r.onload = function () {
 			that._handleIndex(r.response);
 			that._openReady();
-		}
+		};
 		r.send();
 	},
 
@@ -281,6 +281,7 @@ Loader.prototype = {
 	},
 
 	_updateCache : function () {
+                var that = this;
 		var readyNodes = this._readyNodes;
 		if (readyNodes.length <= 0) return;
 
@@ -289,7 +290,7 @@ Loader.prototype = {
 		console.log('upateCache', readyNodes);
 
 		var newCache = cachedNodes.concat(readyNodes);
-		newCache.sort(this._sortNodeCacheFunction);
+		newCache.sort(sortNodeCacheFunction);
 
 		var maxSize = this._maxCacheSize;
 		var size    = 0;
@@ -329,8 +330,8 @@ Loader.prototype = {
 			newCache = newCache.slice(0, firstVictim);
 		}
 
-		var vertexStride = this._header.signature.vertex.byteLength;
-		var faceStride   = this._header.signature.face.byteLength;
+		var vertexStride = this._header.signature.vertex.getByteLength();
+		var faceStride   = this._header.signature.face.getByteLength();
 		//var littleEndian = State.LITTLE_ENDIAN_DATA;
 		//var gl           = this._gl;
 
@@ -343,10 +344,10 @@ Loader.prototype = {
 				var request = node.request;
 				var buffer = request.response;
 				var sig = {
-					texcoords: this._header.signature.vertex.hasTexCoord,
-					normals: this._header.signature.vertex.hasNormal,
-					colors:  this._header.signature.vertex.hasColor,
-					indices: this._header.signature.face.hasIndex
+					texcoords: this._header.signature.vertex.hasTexCoord(),
+					normals: this._header.signature.vertex.hasNormal(),
+					colors:  this._header.signature.vertex.hasColor(),
+					indices: this._header.signature.face.hasIndex()
 				};
 				var _node = {
 					nvert: node.verticesCount,
@@ -386,11 +387,12 @@ Loader.prototype = {
 			//node.vbo = new SglVertexBuffer (gl, {data : vertices});
                         var geometry  = new THREE.BufferGeometry();
  			geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true )
-			if (this._header.signature.face.hasIndex)
+			if (this._header.signature.face.hasIndex())
                                 geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
                         node.vbo = new THREE.Mesh(geometry, this._materials);
                         node.vbo.name = node.index;
                         this._scene.add(node.vbo);
+                        //that.add(node.vbo);
 			node.request = null;
 			//STEP 1: if textures not ready this will be delayed
 			var isReady = true;	
@@ -555,10 +557,10 @@ Loader.prototype = {
 			var compressed = Signature.MECO + Signature.CTM1 + Signature.CTM2;
 			if(!Debug.worker && that._header.signature.flags & compressed) {
 				var sig = {
-					texcoords: that._header.signature.vertex.hasTexCoord,
-					normals: that._header.signature.vertex.hasNormal,
-					colors:  that._header.signature.vertex.hasColor,
-					indices: that._header.signature.face.hasIndex
+					texcoords: that._header.signature.vertex.hasTexCoord(),
+					normals: that._header.signature.vertex.hasNormal(),
+					colors:  that._header.signature.vertex.hasColor(),
+					indices: that._header.signature.face.hasIndex()
 				};
 				var _node = {
 					index: node.index,
@@ -778,7 +780,7 @@ Loader.prototype = {
 			if (!selectedNodes[i]) continue;
 
 			var node    = nodes[i];
-			if(this._header.signature.face.hasIndex) {
+			if(this._header.signature.face.hasIndex()) {
 				var skipped = true;
 				for (var p = node.firstPatch; p < node.lastPatch; ++p) {
 					var patch = patches[p];
@@ -859,6 +861,7 @@ Loader.prototype = {
         }
         
 };
+//});
 
 return Loader;
 
