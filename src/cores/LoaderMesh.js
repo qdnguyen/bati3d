@@ -1,8 +1,18 @@
-define(['jquery', 'THREE', './State', './Header', './Node', './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'./saywho','./defineProperties'],
-function($, THREE, State, Header, Node, NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, sayswho, defineProperties){
+define([
+    'jquery', 
+    'THREE', 
+    './State', 
+    './Header', 
+    './Node', 
+    './NodeIndex' , './Patch', './PatchIndex', './Texture', './TextureIndex', './Signature', './PriorityQueue' ,'./saywho'],
+function(
+        $, 
+        THREE, 
+        State, 
+        Header, 
+        Node, 
+        NodeIndex, Patch, PatchIndex, Texture, TextureIndex, Signature, PriorityQueue, sayswho){
     
-
-
 var Debug = {
 	nodes: true,    //color each node
 	culling: false,  //visibility culling disabled
@@ -25,9 +35,8 @@ sortNodeCacheFunction = function (a, b) {
 	//return b.renderError - a.renderError;
 };
 
-var Loader = function (scene) {
+var LoaderMesh = function () {
 	THREE.Object3D.call( this );
-        this._scene = scene;
 	this._targetError        = State.DEFAULT_TARGET_ERROR;
 	this._targetFps          = State.DEFAULT_TARGET_FPS;
 	this._maxPendingRequests = State.DEFAULT_MAX_PENDING_REQUESTS;
@@ -43,19 +52,14 @@ var Loader = function (scene) {
         this.LITTLE_ENDIAN_DATA = State.LITTLE_ENDIAN_DATA;
         this.PADDING            = State.PADDING; 
         
-	this._reset();
-        
         this._materials = null;
-        //scene.add(this);
+       	this._reset();
 };
 
-Loader.prototype = Object.create(THREE.Object3D.prototype);
-Loader.prototype.constructor = Loader;
+LoaderMesh.prototype = Object.create(THREE.Object3D.prototype);
+LoaderMesh.prototype.constructor = LoaderMesh;
 
-
-//defineProperties(Loader.prototype, {  
-Loader.prototype = {
-	_reset : function () {
+LoaderMesh.prototype._reset = function () {
 		this._status  = State.STATUS_NONE;
 
 		this._inBegin = false;
@@ -86,14 +90,14 @@ Loader.prototype = {
 		var that = this;
                 
 		var path;
-		$('script').each(function(a) { var str = $(this).attr('src'); if(!str) return; if(str.search('Loader.js') >= 0) path = str; });
-		path = path.replace('Loader.js', '../worker/MeshCodeWorker.js'); //meshcoder_worker.js
+		$('script').each(function(a) { var str = $(this).attr('src'); if(!str) return; if(str.search('LoaderMesh.js') >= 0) path = str; });
+		path = path.replace('LoaderMesh.js', '../worker/MeshCodeWorker.js'); //meshcoder_worker.js
 		this._worker = new Worker(path);
 		this._worker.onmessage = function(e) { that._workerFinished(e); };
               
-	},
+};
 
-	_requestHeader : function () {
+LoaderMesh.prototype._requestHeader = function () {
 		var offset = 0;
 		var size   = Header.SIZEOF;
 		var that = this;
@@ -106,9 +110,9 @@ Loader.prototype = {
 			that._requestIndex();
 		};
 		r.send();
-	},
+};
 
-	_handleHeader : function (buffer) {
+LoaderMesh.prototype._handleHeader = function (buffer) {
 		var view         = new DataView(buffer);
 		var offset       = 0;
 		var littleEndian = State.LITTLE_ENDIAN_DATA;
@@ -117,18 +121,19 @@ Loader.prototype = {
 		header.import(view, offset, littleEndian);
 		this._header = header;
                 this._createMaterialForEachPatch();
-	},
+};
 
 
-        _createMaterialForEachPatch : function(){
+LoaderMesh.prototype._createMaterialForEachPatch = function(){
                 var materials = []; 
                 for(var i =0; i < this._header.patchesCount; i++){
                       var color = new THREE.Color().setHex( Math.random() * 0xffffff );
                       materials.push(new THREE.MeshBasicMaterial( { color: color} ));//, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5
                 }
                 this._materials = new THREE.MultiMaterial(materials);
-        },
-	_requestIndex : function () {
+};
+
+LoaderMesh.prototype._requestIndex = function () {
 		var header = this._header;
 		var offset = Header.SIZEOF;
 		var size   = header.nodesCount * Node.SIZEOF + header.patchesCount * Patch.SIZEOF + header.texturesCount * Texture.SIZEOF;
@@ -143,9 +148,9 @@ Loader.prototype = {
 			that._openReady();
 		};
 		r.send();
-	},
+};
 
-	_handleIndex : function (buffer) {
+LoaderMesh.prototype._handleIndex = function (buffer) {
 		var header       = this._header;
 		var view         = new DataView(buffer);
 		var offset       = 0;
@@ -161,9 +166,9 @@ Loader.prototype = {
 
 		this._textures = new TextureIndex();
 		offset += this._textures.import(header.texturesCount, view, offset, littleEndian);
-	},
+};
 
-	_openReady : function() {
+LoaderMesh.prototype._openReady = function() {
 		var nodesCount = this._nodes.length;
 		var nodes      = this._nodes.items;
 		for (var i=0; i<nodesCount; ++i) {
@@ -190,97 +195,97 @@ Loader.prototype = {
 		if (this._onSceneReady) {
 			this._onSceneReady();
 		}
-	},
+};
 
-	_signalUpdate : function () {
+LoaderMesh.prototype._signalUpdate = function () {
 		var upd = this._onUpdate;
 		if (upd) {
 			upd();
 		}
-	},
+};
 
-	url: function() {
+LoaderMesh.prototype.url= function() {
 		var url = this._url;
 		/**Safari PATCH**/
 		/**/if (sayswho()[0]==='Safari' && sayswho()[1]!=='9') 
 		/**/  url = this._url + '?' + Math.random();
 		/**Safari PATCH**/
 		return url;
-	},
+};
         
-	get status() {
+LoaderMesh.prototype.getStatus = function() {
 		return this._status;
-	},
+};
 
-	get isClosed() {
+LoaderMesh.prototype.isClosed = function() {
 		return (this._status == State.STATUS_NONE);
-	},
+};
 
-	get isOpening() {
+LoaderMesh.prototype.isOpening = function() {
 		return (this._status == State.STATUS_OPENING);
 	},
 
-	get isOpen() {
+LoaderMesh.prototype.isOpen = function() {
 		return (this._status == State.STATUS_OPEN);
 	},
 
-	get isReady() {
-		return this.isOpen;
+LoaderMesh.prototype.isReady = function() {
+		return this.isOpen() ;
 	},
 
-	get datasetCenter() {
-		if (!this.isReady) return new THREE.Vector3();
+LoaderMesh.prototype.datasetCenter = function() {
+		if (!this.isReady()) return new THREE.Vector3();
 		return this._header.sphere.center;
 	},
 
-	get datasetRadius() {
-		if (!this.isReady) return 1.0;
+LoaderMesh.prototype.datasetRadius = function() {
+		if (!this.isReady()) return 1.0;
 		return this._header.sphere.radius;
 	},
 
-	get inBegin() {
+LoaderMesh.prototype.inBegin = function() {
 		return this._inBegin;
 	},
 
-	get maxPendingRequests() {
+LoaderMesh.prototype.getMaxPendingRequests = function() {
 		return this._maxPendingRequests;
 	},
 
-	set maxPendingRequests(r) {
+LoaderMesh.prototype.setMaxPendingRequests = function(r) {
 		this._maxPendingRequests = r;
 	},
 
-	get targetError() {
+LoaderMesh.prototype.getTargetError = function() {
 		return this._targetError;
 	},
 
-	set targetError(e) {
+LoaderMesh.prototype.setTargetError = function(e) {
 		this._targetError = e;
 	},
 
-	destroy : function () {
+LoaderMesh.prototype.destroy = function () {
 		this.close();
 	},
 
-	open : function (url) {
+LoaderMesh.prototype.open = function (url) {
 		this.close();
 		this._status = State.STATUS_OPENING;
 		this._url    = url;
 		this._requestHeader();
 	},
 
-	close : function () {
-		if (this.isClosed) return;
+LoaderMesh.prototype.close = function () {
+		if (this.isClosed() ) return;
 
-		if (this.isOpening) {
+		if (this.isOpening() ) {
 		}
-		else if (this.isOpen) {
+		else if (this.isOpen() ) {
 		}
 
 		this._reset();
 	},
 
-	_updateCache : function () {
+LoaderMesh.prototype._updateCache = function () {
                 var that = this;
 		var readyNodes = this._readyNodes;
 		if (readyNodes.length <= 0) return;
@@ -391,8 +396,7 @@ Loader.prototype = {
                                 geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
                         node.vbo = new THREE.Mesh(geometry, this._materials);
                         node.vbo.name = node.index;
-                        this._scene.add(node.vbo);
-                        //that.add(node.vbo);
+                        this.add(node.vbo);
 			node.request = null;
 			//STEP 1: if textures not ready this will be delayed
 			var isReady = true;	
@@ -415,13 +419,13 @@ Loader.prototype = {
 		this._cacheSize   = size;
 	},
         
-        _hierarchyVisit_isVisible : function (center, radius) {
+LoaderMesh.prototype._hierarchyVisit_isVisible = function (center, radius) {
 		if (Debug.culling) return true;
 		var sphere = new THREE.Sphere(center,radius);
 		return this._frustum.intersectsSphere(sphere);
 	},
        
-        _hierarchyVisit_nodeError : function (n) {
+LoaderMesh.prototype._hierarchyVisit_nodeError = function (n) {
 		var node   = this._nodes.items[n];
 		var sphere = node.sphere;
                 // inline distance computation
@@ -441,7 +445,7 @@ Loader.prototype = {
 		return error;
 	},
 
-	_hierarchyVisit_insertChildren : function (n, visitQueue, block) {
+LoaderMesh.prototype._hierarchyVisit_insertChildren = function (n, visitQueue, block) {
 		var nodes        = this._nodes.items;
 		var node         = nodes[n];
 		var patches      = this._patches.items;
@@ -455,14 +459,14 @@ Loader.prototype = {
 	},
 
 
-        _hierarchyVisit_insertNode : function (n, visitQueue) {
+LoaderMesh.prototype._hierarchyVisit_insertNode = function (n, visitQueue) {
 		if (n == this._nodes.sink) return;
 
 		if (this._visitedNodes[n]) return;
 		this._visitedNodes[n] = 1;
 
 		var error = this._hierarchyVisit_nodeError(n);
-		if(error < this.targetError*0.8) return;  //2% speed TODO check if needed
+		if(error < this._targetError*0.8) return;  //2% speed TODO check if needed
 
 		var node  = this._nodes.items[n];
 		node.renderError = error;
@@ -476,11 +480,11 @@ Loader.prototype = {
 	},
         
 
-        _hierarchyVisit_expandNode : function (nodeData) {
+LoaderMesh.prototype._hierarchyVisit_expandNode = function (nodeData) {
 
 		var node  = nodeData.node;
-		if(node.renderError < this.targetError) {
-//			console.log("Stop becaouse of error: " + node.renderError + " < " + this.targetError);
+		if(node.renderError < this._targetError) {
+//			console.log("Stop becaouse of error: " + node.renderError + " < " + this._targetError);
 			return false;
 		}
 		if(this._drawSize > this.drawBudget) {
@@ -502,7 +506,7 @@ Loader.prototype = {
 	},
       
 
-	_hierarchyVisit : function () {
+LoaderMesh.prototype._hierarchyVisit = function () {
             if(Debug.extract === true)
                 		return;
 		this._redrawOnNewNodes = false;
@@ -547,7 +551,7 @@ Loader.prototype = {
 		}
 	},
 
-	_createNodeHandler : function (node) {
+LoaderMesh.prototype._createNodeHandler = function (node) {
 		//compressed use worker:
 		var that = this;
 		return function () {
@@ -582,7 +586,7 @@ Loader.prototype = {
 	},
 
 
-	_workerFinished: function(_node) {
+LoaderMesh.prototype._workerFinished = function(_node) {
 		var node = this._nodes.items[_node.data.index];
 		node.buffer = _node.data.buffer;
 		this._readyNodes.push(node);
@@ -592,7 +596,7 @@ Loader.prototype = {
 		}
 	},
         
-        _createTextureHandler : function (tex) {
+LoaderMesh.prototype._createTextureHandler = function (tex) {
 		var that = this;
 
 		return function () {
@@ -639,7 +643,7 @@ Loader.prototype = {
 		};
 	},
 
-	_requestNodes : function () {
+LoaderMesh.prototype._requestNodes = function () {
 		if(Debug.request) {
 			this._candidateNodes = [];
 			return;
@@ -734,7 +738,7 @@ Loader.prototype = {
 		this._candidateNodes = [];
 	},
 
-        _updateView : function (camera, renderer) {
+LoaderMesh.prototype._updateView = function (camera, renderer) {
         	
                 camera.updateMatrixWorld();
         	var viewI = camera.matrixWorldInverse;
@@ -756,18 +760,19 @@ Loader.prototype = {
         },
 
 
-        update : function(camera, renderer){
-                if (!this.isOpen) return;
+LoaderMesh.prototype.update = function(scene, camera, renderer){
+                if (!this.isOpen()) return;
 		if (this._header.nodesCount <= 0) return;
 
                 this._updateView(camera, renderer);
 		this._updateCache();
 		this._hierarchyVisit();
 		this._requestNodes();
+                this._checkVisibilityNodes(scene);
                 this._render();
         },
 
-        _render : function () {
+LoaderMesh.prototype._render = function () {
             
 		var nodes = this._nodes.items;
 		var patches = this._patches.items;
@@ -831,13 +836,13 @@ Loader.prototype = {
                         node.vbo.geometry.groupsNeedUpdate = true;
                         //mesh.geometry.attributes.color.needsUpdate = true;
 		}
-                this._checkVisibilityNodes();
+                //this._checkVisibilityNodes();
 	},
         
-        _checkVisibilityNodes : function(){
+LoaderMesh.prototype._checkVisibilityNodes = function(scene){
                 var selectedNodes = this._selectedNodes;
                 for(var i = 0; i < selectedNodes.length; ++i){
-                    var inSceneNode =  this._scene.getObjectByName(i);
+                    var inSceneNode =  scene.getObjectByName(i);
                     if(inSceneNode){
                             if (!selectedNodes[i]){
                                    inSceneNode.visible = false;
@@ -846,8 +851,8 @@ Loader.prototype = {
                             }
                     }
                 }
-        },
-        _addNodeIntoScene : function(node){
+       },
+LoaderMesh.prototype._addNodeIntoScene = function(node){
              var inSceneNode = this._scene.getObjectByName(node.index);
              
              if(inSceneNode instanceof THREE.Mesh){
@@ -858,11 +863,8 @@ Loader.prototype = {
                  inSceneNode = null;
              }
             this._scene.add(node.vbo); 
-        }
-        
 };
-//});
-
-return Loader;
+        
+return LoaderMesh;
 
 });
