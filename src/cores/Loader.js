@@ -33,6 +33,8 @@ var Loader = function (scene) {
         this.PADDING            = State.PADDING; 
         
 	this._reset();
+        
+        this._materials = null;
 
 };
 Loader.prototype = Object.create(THREE.Object3D.prototype);
@@ -114,8 +116,19 @@ Loader.prototype = {
 		var header = new Header();
 		header.import(view, offset, littleEndian);
 		this._header = header;
+                this._createMaterialForEachPatch();
 	},
 
+
+        _createMaterialForEachPatch : function(){
+                var materials = []; 
+                for(var i =0; i < this._header.patchesCount; i++){
+                      var color = new THREE.Color().setHex( Math.random() * 0xffffff );
+                      materials.push(new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} ));
+                      //materials.push(new THREE.MeshPhongMaterial( { color: color} ));
+                }
+                this._materials = new THREE.MultiMaterial(materials);
+        },
 	_requestIndex : function () {
 		var header = this._header;
 		var offset = Header.SIZEOF;
@@ -158,8 +171,7 @@ Loader.prototype = {
 			var node = nodes[i];
 			node.status      = State._NODE_NONE;
 			node.request     = null;
-                        node.vbo         = null; //TODO: using THREE.Mesh/THREE.BufferGeometry
-                        node.ibo         = null;
+                        node.vbo         = null; 
 			node.color       = new THREE.Color();
 			node.renderError = 0.0;
 			node.renderFrame = 0;
@@ -375,18 +387,12 @@ Loader.prototype = {
 			var indices  = new Uint8Array(node.buffer, faceOffset,   faceSize);
 
 			//node.vbo = new SglVertexBuffer (gl, {data : vertices});
-                        var color = new THREE.Color().setHex( Math.random() * 0xffffff );
-                        var material  = new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} );
                         var geometry  = new THREE.BufferGeometry();
-                        node.vbo      = new THREE.Mesh(geometry, material );
-                        node.vbo.name = node.index;
-                        this._scene.add(node.vbo);
-                        //node.vbo.geometry.setDrawRange( 0, nf );
-			node.vbo.geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true )
+ 			geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true )
 			if (this._header.signature.face.hasIndex)
-				//node.ibo = new SglIndexBuffer  (gl, {data : indices });
-                                node.vbo.geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
-    
+                                geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
+                        node.vbo = new THREE.Mesh(geometry, this._materials);    
+                        this._scene.add(node.vbo);
 			node.request = null;
 			//STEP 1: if textures not ready this will be delayed
 			var isReady = true;	
@@ -867,9 +873,9 @@ Loader.prototype = {
 						//var error = gl.getError(); 
 					}
 					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
-                                        //console.log(first,last);
-                                        node.vbo.geometry.setDrawRange( first*3, (last - first) * 3);
-                                        //node.vbo.geometry.addGroup( first*3, last*3, 0);
+                                        //console.log(first,last, node.verticesCount, node.facesCount);
+                                        //node.vbo.geometry.setDrawRange( first*3, (last - first) * 3);
+                                        node.vbo.geometry.addGroup( first*3, (last - first) * 3, this._materials[p]);
 					this._rendered += last - first;
                                        
 				}
@@ -877,6 +883,8 @@ Loader.prototype = {
 			}
                         
                         node.vbo.geometry.attributes.position.needsUpdate = true;
+                        node.vbo.geometry.index.needsUpdate = true;
+                        node.vbo.geometry.groupsNeedUpdate = true;
                         //mesh.geometry.attributes.color.needsUpdate = true;
 		} 
 
