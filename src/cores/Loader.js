@@ -321,10 +321,7 @@ Loader.prototype = {
 					node.vbo.material.dispose();
                                         node.vbo = null;
 				}
-				/*if (node.ibo) {
-					node.ibo.destroy();
-					node.ibo = null;
-				}*/
+
 				node.request = null;
 				node.buffer = null;
 				node.status  = State._NODE_NONE;
@@ -768,25 +765,7 @@ Loader.prototype = {
         },
 
         _render : function () {
-		var order = [0, 3, 1, 2, 4];
-
-		var vertexStride       = this._header.signature.vertex.byteLength;
-		var vertexAttributes   = this._header.signature.vertex.attributes;
-		var vertexAttribsCount = this._header.signature.vertex.lastAttribute + 1;
-
-		for (var i=0; i<4; ++i) {
-			if (vertexAttributes[order[i]].isNull) continue;
-			//gl.enableVertexAttribArray(order[i]);
-		}
-
-		//gl.vertexAttrib4fv(VertexElement.COLOR, [0.8, 0.8, 0.8, 1.0]);
-                /*
-		if (Debug.nodes) {
-			if (!vertexAttributes[VertexElement.COLOR].isNull) {
-				gl.disableVertexAttribArray(VertexElement.COLOR);
-			}
-		}
-                */    
+            
 		var nodes = this._nodes.items;
 		var patches = this._patches.items;
 		var selectedNodes = this._selectedNodes;
@@ -812,43 +791,7 @@ Loader.prototype = {
 
 			if(!this._hierarchyVisit_isVisible(node.sphere.center, node.tightRadius)) 
 				continue;
-                        /* 
-                         Buffer is already binded when we create new BufferGeometry    
-			node.vbo.bind();
-			if(node.ibo) {
-				node.ibo.bind();
-			}*/
-
-			var attribOffset = 0;
-			//order is needed because attributes are oredere by vertex normal colors tex, while data inverts tex and normal for alignment
-			for (var j=0; j<4; ++j) { //vertexAttribsCount; ++j) {
-				var attrib = vertexAttributes[order[j]];
-				if (attrib.isNull) continue;
-				//gl.vertexAttribPointer(order[j], attrib.size, attrib.glType, attrib.normalized, attrib.stride, attrib.offset + attribOffset);
-				attribOffset += attrib.offset + attrib.stride * node.verticesCount;
-			}
-
-			if (Debug.nodes) {
-				//gl.vertexAttrib4fv(VertexElement.COLOR, node.color);
-			}
-			if(!this._header.signature.face.hasIndex) {
-                            var pointsize = Math.floor(0.30*node.renderError);
-                            if(pointsize > 3) pointsize = 3;
-				//gl.vertexAttrib1fv(VertexElement.DATA0, [pointsize]);
-			}
-			if (Debug.draw) continue;
-
-			//point cloud do not need patches
-			if(!this._header.signature.face.hasIndex) {
-				var fraction = (node.renderError/this.currentError - 1);
-				if(fraction > 1) fraction = 1;
-
-				var count = fraction * (node.verticesCount);
-				//gl.drawArrays(gl.POINTS, 0, count);
-				this._rendered += count;
-				continue;
-			}
-
+                            
 			//concatenate renderings to remove useless calls. except we have textures.
 			var first = 0;
 			var last = 0;
@@ -872,10 +815,8 @@ Loader.prototype = {
 						//gl.bindTexture(gl.TEXTURE_2D, tex);
 						//var error = gl.getError(); 
 					}
-					//gl.glDrawElements(gl.TRIANGLES, (last - first) * 3, gl.UNSIGNED_SHORT, first * 3 * Uint16Array.BYTES_PER_ELEMENT);
-                                        //console.log(first,last, node.verticesCount, node.facesCount);
-                                        //node.vbo.geometry.setDrawRange( first*3, (last - first) * 3);
-                                        node.vbo.geometry.addGroup( first*3, (last - first) * 3, this._materials[p]);
+                                        //console.log(first,last, p);
+                                        node.vbo.geometry.addGroup( first*3, (last - first) * 3, p);
 					this._rendered += last - first;
                                        
 				}
@@ -888,13 +829,6 @@ Loader.prototype = {
                         //mesh.geometry.attributes.color.needsUpdate = true;
 		} 
 
-		for (var i = 0; i < 4; ++i) {
-			if (vertexAttributes[order[i]].isNull) continue;
-			//gl.disableVertexAttribArray(order[i]);
-		}
-
-		//SglVertexBuffer.unbind(gl);
-		//SglIndexBuffer.unbind(gl);
 	}    
 };
 
