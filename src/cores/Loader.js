@@ -125,7 +125,6 @@ Loader.prototype = {
                 for(var i =0; i < this._header.patchesCount; i++){
                       var color = new THREE.Color().setHex( Math.random() * 0xffffff );
                       materials.push(new THREE.MeshBasicMaterial( { color: color, wireframe: false, side: THREE.DoubleSide, transparent : false, opacity :0.5} ));
-                      //materials.push(new THREE.MeshPhongMaterial( { color: color} ));
                 }
                 this._materials = new THREE.MultiMaterial(materials);
         },
@@ -317,6 +316,7 @@ Loader.prototype = {
 			for (var i=firstVictim, n=newCache.length; i<n; ++i) {
 				var node = newCache[i];
 				if (node.vbo) {
+                                        //node.vbo.visible = false;
 					node.vbo.geometry.dispose(); // node.vbo.destroy();
 					node.vbo.material.dispose();
                                         node.vbo = null;
@@ -388,7 +388,8 @@ Loader.prototype = {
  			geometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 )); //.setDynamic( true )
 			if (this._header.signature.face.hasIndex)
                                 geometry.setIndex(new THREE.BufferAttribute( indices, 1));    
-                        node.vbo = new THREE.Mesh(geometry, this._materials);    
+                        node.vbo = new THREE.Mesh(geometry, this._materials);
+                        node.vbo.name = node.index;
                         this._scene.add(node.vbo);
 			node.request = null;
 			//STEP 1: if textures not ready this will be delayed
@@ -827,9 +828,36 @@ Loader.prototype = {
                         node.vbo.geometry.index.needsUpdate = true;
                         node.vbo.geometry.groupsNeedUpdate = true;
                         //mesh.geometry.attributes.color.needsUpdate = true;
-		} 
-
-	}    
+		}
+                this._checkVisibilityNodes();
+	},
+        
+        _checkVisibilityNodes : function(){
+                var selectedNodes = this._selectedNodes;
+                for(var i = 0; i < selectedNodes.length; ++i){
+                    var inSceneNode =  this._scene.getObjectByName(i);
+                    if(inSceneNode){
+                            if (!selectedNodes[i]){
+                                   inSceneNode.visible = false;
+                            }else{
+                                   inSceneNode.visible = true;
+                            }
+                    }
+                }
+        },
+        _addNodeIntoScene : function(node){
+             var inSceneNode = this._scene.getObjectByName(node.index);
+             
+             if(inSceneNode instanceof THREE.Mesh){
+                 console.log(inSceneNode.id, inSceneNode.name);
+                 this._scene.remove(inSceneNode);
+                 inSceneNode.geometry.dispose();
+                 //inSceneNode.material.dispose();
+                 inSceneNode = null;
+             }
+            this._scene.add(node.vbo); 
+        }
+        
 };
 
 return Loader;
