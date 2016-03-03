@@ -782,9 +782,12 @@ LoaderMesh.prototype._render = function () {
 
 		var last_texture = -1;
 		for (var i=0; i<nodesCount; ++i) {
+			var node    = nodes[i];
+			if(node.vbo)
+				node.vbo.visible = false;
+
 			if (!selectedNodes[i]) continue;
 
-			var node    = nodes[i];
 			if(this._header.signature.face.hasIndex()) {
 				var skipped = true;
 				for (var p = node.firstPatch; p < node.lastPatch; ++p) {
@@ -799,7 +802,9 @@ LoaderMesh.prototype._render = function () {
 
 			if(!this._hierarchyVisit_isVisible(node.sphere.center, node.tightRadius)) 
 				continue;
-                            
+
+			node.vbo.visible = true;
+
 			//concatenate renderings to remove useless calls. except we have textures.
 			var first = 0;
 			var last = 0;
